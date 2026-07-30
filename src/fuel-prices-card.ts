@@ -1,0 +1,1401 @@
+// Tankstellen Austria — Lovelace custom card
+// https://github.com/rolandzeiner/tankstellen-austria
+//
+// Architecture: Lit 3 + Shadow DOM + Rollup, single-file HACS bundle.
+// Built from the ha-lovelace-card skill (which is faithfully derived from
+// custom-cards/boilerplate-card).
+
+import {
+  LitElement,
+  html,
+  nothing,
+  type TemplateResult,
+  type PropertyValues,
+  type CSSResultGroup,
+} from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
+
+import type {
+  CarConfig,
+  HomeAssistant,
+  LovelaceCardEditor,
+  OpeningHours,
+  PaymentMethods,
+  Station,
+  TankstellenAustriaCardConfig,
+  TankstellenEntity,
+} from "./types";
+import {
+  CARD_VERSION,
+  DYNAMIC_MANUAL_COOLDOWN_MS,
+  HISTORY_REFRESH_MS,
+} from "./const";
+import { normaliseConfig } from "./utils/config";
+import { findTankstellenEntities } from "./utils/entities";
+import {
+  hasPaymentMethods,
+  matchesPaymentFilter,
+  matchingPaymentMethods,
+} from "./utils/payment";
+import { isClosingSoon } from "./utils/station";
+import { formatDistance, formatPrice, mapsUrl } from "./utils/price";
+import {
+  getFuelName,
+  getWeekdays,
+  resolveLang,
+  translate,
+  type TranslateContext,
+} from "./localize/localize";
+import { fetchHistory, getCachedHistory, type HistoryPoint } from "./history";
+import {
+  attachSparklineHover,
+  buildSparkline,
+  type HourlyEnvelope,
+} from "./sparkline";
+import {
+  analyzeBestRefuel,
+  buildHourlyEnvelope,
+  type BestRefuelResult,
+} from "./analytics/best-refuel";
+import { cardStyles } from "./styles";
+import {
+  checkCardVersionWS,
+  renderVersionBanner,
+  reloadAfterCacheWipe,
+} from "./shared-render";
+import {
+  detectNavPlatform,
+  E_CONTROL_HOMEPAGE,
+  E_CONTROL_LOGO_URL,
+  resolveMapLinkKind,
+  safeHttpsUri,
+  safeNavUri,
+} from "./utils";
+
+// Eager-register the editor element. With `inlineDynamicImports: true` the
+// editor code is already in this bundle — importing it at the top guarantees
+// `customElements.define(…)` has run before `getConfigElement()` creates the
+// element, avoiding a race where HA creates an unregistered element.
+import "./editor";
+
+// E-Control attribution string (§3 attribution practice). Hard-coded as a
+// fallback so the footer stays correct even when a user-built template
+// sensor strips the upstream `attribution` attribute. Mirrors the
+// Ladestellen Austria card.
+const ATTRIBUTION_REQUIRED = "Datenquelle: E-Control";
+
+interface WindowWithCustomCards extends Window {
+  customCards: Array<{
+    type: string;
+    name: string;
+    description: string;
+    preview?: boolean;
+    documentationURL?: string;
+    // Opt into the 2026.6 entity-first card picker. Additive key older HA
+    // ignores; returns a one-entity stub for this integration's own sensors
+    // (the user can extend `entities` afterwards).
+    getEntitySuggestion?: (
+      hass: HomeAssistant,
+      entityId: string,
+    ) => { config: Record<string, unknown> } | null;
+  }>;
+}
+
+(window as unknown as WindowWithCustomCards).customCards =
+  (window as unknown as WindowWithCustomCards).customCards || [];
+(window as unknown as WindowWithCustomCards).customCards.push({
+  type: "tankstellen-austria-card",
+  name: "Tankstellen Austria",
+  description:
+    "Austrian fuel prices from E-Control with sparklines and best-refuel analytics.",
+  preview: true,
+  documentationURL: "https://github.com/rolandzeiner/tankstellen-austria",
+  getEntitySuggestion: (hass: HomeAssistant, entityId: string) => {
+    if (!entityId.startsWith("sensor.")) return null;
+    if (hass?.entities?.[entityId]?.platform !== "tankstellen_austria")
+      return null;
+    return {
+      config: {
+        type: "custom:tankstellen-austria-card",
+        entities: [entityId],
+      },
+    };
+  },
+});
+
+@customElement("tankstellen-austria-card")
+export class TankstellenAustriaCard extends LitElement {
+  public static getConfigElement(): LovelaceCardEditor {
+    return document.createElement(
+      "tankstellen-austria-card-editor",
+    ) as LovelaceCardEditor;
+  }
+
+  public static getStubConfig(hass: HomeAssistant | undefined): Record<string, unknown> {
+    const entities = findTankstellenEntities(hass);
+    return {
+      entities: entities.length ? [entities[0]] : [],
+      max_stations: 5,
+      show_index: true,
+      show_map_links: true,
+      show_distance: true,
+      show_opening_hours: true,
+      show_payment_methods: true,
+      show_history: true,
+      show_minmax: true,
+      show_best_refuel: true,
+      payment_filter: [],
+      payment_highlight_mode: true,
+      show_cars: false,
+      cars: [],
+    };
+  }
+
+  @property({ attribute: false }) public hass!: HomeAssistant;
+
+  @state() private _config!: TankstellenAustriaCardConfig;
+  @state() private _activeTab = 0;
+  @state() private _expandedStations: Set<string> = new Set();
+  @state() private _history: Record<string, HistoryPoint[]> = {};
+  @state() private _versionMismatch: string | null = null;
+  @state() private _lastManualRefresh = 0;
+  @state() private _noNewData = false;
+  @state() private _historyError = false;
+  // Incremented by the cooldown interval so the countdown re-renders each
+  // second while a refresh is on cooldown. Reactive, but never read —
+  // shouldUpdate gates on it via `changed.has("_cooldownTick")`.
+  @state() private _cooldownTick = 0;
+
+  // Non-reactive instance fields.
+  private _initDone = false;
+  private _historyInterval: number | undefined;
+  private _cooldownInterval: number | undefined;
+  // Manual-refresh post-fetch check (3s after the update_entity calls) and
+  // the reduce-motion cooldown wake-up are one-shot setTimeouts. Stored on
+  // the instance so disconnectedCallback can cancel them — otherwise a
+  // dashboard edit-mode flip leaves a pending callback that fires against
+  // a detached element and writes to a now-unobserved reactive prop.
+  private _postRefreshTimeout: number | undefined;
+  private _cooldownTimeout: number | undefined;
+  private _sparklineCleanup: (() => void) | undefined;
+
+  public setConfig(config: TankstellenAustriaCardConfig): void {
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error("tankstellen-austria-card: config must be an object");
+    }
+    // entities is optional (auto-discovery fallback), but if provided it
+    // must be a string or string[] — silently dropping a typo'd shape
+    // hides the misconfiguration behind the empty-state.
+    const ent = (config as Record<string, unknown>).entities;
+    if (ent !== undefined && typeof ent !== "string" && !Array.isArray(ent)) {
+      throw new Error(
+        "tankstellen-austria-card: config.entities must be a string or array of entity IDs",
+      );
+    }
+    this._config = normaliseConfig(config);
+    // Editor-preview rebuilds the card instance on every config change.
+    // Without this seed, each rebuild starts with empty `_history` and
+    // the sparkline returns `nothing` until the async `_fetchAllHistory`
+    // completes — visible flicker. The module-scope cache in history.ts
+    // survives across instances, so reading it synchronously here means
+    // the FIRST render of a fresh instance already has data.
+    if (this._config.entities) {
+      const seed: Record<string, HistoryPoint[]> = {};
+      let any = false;
+      for (const eid of this._config.entities) {
+        const cached = getCachedHistory(eid);
+        if (cached.length >= 2) {
+          seed[eid] = cached;
+          any = true;
+        }
+      }
+      if (any) this._history = { ...this._history, ...seed };
+    }
+  }
+
+  public getCardSize(): number {
+    return 6;
+  }
+
+  public getGridOptions(): {
+    columns: number | "full";
+    rows: number | "auto";
+    min_columns: number;
+    min_rows: number;
+  } {
+    return {
+      columns: 12,
+      rows: "auto",
+      min_columns: 6,
+      min_rows: 4,
+    };
+  }
+
+  // Fingerprint-based gate. The default `hasConfigOrEntityChanged` only
+  // watches a single `config.entity`, which this multi-entity card doesn't
+  // have. Re-render on: config change, UI state change, history arrival,
+  // version-mismatch discovery, cooldown tick, or a tracked-entity state
+  // object reference change. Without this gate the card re-renders on every
+  // entity state change anywhere in the HA install.
+  protected override shouldUpdate(changed: PropertyValues): boolean {
+    if (!this._config) return false;
+    if (
+      changed.has("_config") ||
+      changed.has("_activeTab") ||
+      changed.has("_expandedStations") ||
+      changed.has("_history") ||
+      changed.has("_historyError") ||
+      changed.has("_versionMismatch") ||
+      changed.has("_lastManualRefresh") ||
+      changed.has("_noNewData") ||
+      changed.has("_cooldownTick")
+    ) {
+      return true;
+    }
+    const prev = changed.get("hass") as HomeAssistant | undefined;
+    if (!prev) return true;
+    const eids = this._trackedEntityIds();
+    return eids.some((eid) => prev.states[eid] !== this.hass.states[eid]);
+  }
+
+  private _trackedEntityIds(): string[] {
+    if (this._config.entities?.length) return this._config.entities;
+    return findTankstellenEntities(this.hass);
+  }
+
+  private _resolveEntities(): TankstellenEntity[] {
+    if (!this.hass) return [];
+    const ids = this._trackedEntityIds();
+    return ids
+      .map((eid): TankstellenEntity | null => {
+        const state = this.hass.states[eid];
+        if (!state) return null;
+        return {
+          entity_id: eid,
+          state: state.state,
+          attributes: state.attributes as TankstellenEntity["attributes"],
+          last_updated: state.last_updated,
+        };
+      })
+      .filter((e): e is TankstellenEntity => e !== null);
+  }
+
+  private _ctx(): TranslateContext {
+    return {
+      configLanguage: this._config?.language,
+      hassLanguage: this.hass?.language,
+    };
+  }
+
+  private _t(key: string, replacements?: Record<string, string>): string {
+    return translate(`card.${key}`, this._ctx(), replacements);
+  }
+
+  // --- Lifecycle ---
+
+  public override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this._historyInterval !== undefined) {
+      clearInterval(this._historyInterval);
+      this._historyInterval = undefined;
+    }
+    if (this._cooldownInterval !== undefined) {
+      clearInterval(this._cooldownInterval);
+      this._cooldownInterval = undefined;
+    }
+    if (this._postRefreshTimeout !== undefined) {
+      clearTimeout(this._postRefreshTimeout);
+      this._postRefreshTimeout = undefined;
+    }
+    if (this._cooldownTimeout !== undefined) {
+      clearTimeout(this._cooldownTimeout);
+      this._cooldownTimeout = undefined;
+    }
+    if (this._sparklineCleanup) {
+      this._sparklineCleanup();
+      this._sparklineCleanup = undefined;
+    }
+    // Let the next updated() re-start the history interval. Matters during
+    // dashboard edit mode which rapidly disconnects/reconnects the card.
+    this._initDone = false;
+  }
+
+  protected override updated(_changed: PropertyValues): void {
+    // One-shot bootstrap on first hass arrival.
+    if (!this._initDone && this.hass && this._config) {
+      this._initDone = true;
+      void this._fetchAllHistory();
+      this._historyInterval = window.setInterval(() => {
+        void this._fetchAllHistory();
+      }, HISTORY_REFRESH_MS);
+      void this._checkCardVersion();
+    }
+    // Re-wire sparkline hover after every render (cheap; entity may have
+    // changed with a tab click).
+    this._reattachSparklineHover();
+  }
+
+  private async _fetchAllHistory(): Promise<void> {
+    try {
+      const entities = this._resolveEntities();
+      await Promise.all(
+        entities.map(async (e) => {
+          const points = await fetchHistory(this.hass, e.entity_id);
+          this._history = { ...this._history, [e.entity_id]: points };
+        }),
+      );
+      this._historyError = false;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[Tankstellen Austria] history refresh failed", err);
+      this._historyError = true;
+    }
+  }
+
+  private async _checkCardVersion(): Promise<void> {
+    const mismatch = await checkCardVersionWS(
+      this.hass,
+      "tankstellen_austria/card_version",
+      CARD_VERSION,
+    );
+    if (mismatch) this._versionMismatch = mismatch;
+  }
+
+  private _reattachSparklineHover(): void {
+    if (this._sparklineCleanup) {
+      this._sparklineCleanup();
+      this._sparklineCleanup = undefined;
+    }
+    const container = this.shadowRoot?.querySelector<HTMLElement>(
+      ".sparkline-container[data-entity]",
+    );
+    if (!container) return;
+    const weekdays = getWeekdays(this._ctx());
+    const lang = resolveLang(this._ctx());
+    const formatTime = (ts: number): string => {
+      const d = new Date(ts);
+      const wd = weekdays[d.getDay()]?.slice(0, 2) ?? "";
+      const date =
+        lang === "de"
+          ? `${d.getDate()}.${d.getMonth() + 1}.`
+          : `${d.getMonth() + 1}/${d.getDate()}`;
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${wd} ${date} ${hh}:${mm}`;
+    };
+    this._sparklineCleanup = attachSparklineHover(container, {
+      formatTime,
+      formatPrice,
+    });
+  }
+
+  // --- Render ---
+
+  protected override render(): TemplateResult {
+    if (!this.hass || !this._config) {
+      return html`
+        <ha-card>
+          <div class="empty" role="status" aria-live="polite">
+            ${this._t("loading")}
+          </div>
+          ${this._renderFooter(undefined)}
+        </ha-card>
+      `;
+    }
+
+    const entities = this._resolveEntities();
+    const activeTab =
+      this._activeTab >= entities.length ? 0 : this._activeTab;
+
+    if (!entities.length) {
+      return html`
+        <ha-card>
+          ${this._renderVersionBanner()}
+          <div class="empty">${this._t("no_data")}</div>
+          ${this._renderFooter(undefined)}
+        </ha-card>
+      `;
+    }
+
+    // entities.length > 0 was just checked above, so entities[0] is defined.
+    const active = entities[activeTab] ?? entities[0]!;
+    const attribution = active.attributes.attribution;
+
+    return html`
+      <ha-card>
+        ${this._renderTabs(entities, activeTab)}
+        <div class="wrap">
+          ${this._renderVersionBanner()}
+          ${this._historyError
+            ? html`<ha-alert alert-type="warning" role="alert">
+                ${this._t("history_fetch_error")}
+              </ha-alert>`
+            : nothing}
+          <section
+            class="station-section"
+            style="--tankst-accent: var(--primary-color);"
+          >
+            ${this._renderHeader(active)}
+            ${this._renderHero(active)}
+            ${this._renderSparklineBlock(active)}
+            ${this._renderCars(active)}
+          </section>
+          ${this._renderStationList(active, activeTab)}
+        </div>
+        ${this._renderFooter(attribution)}
+      </ha-card>
+    `;
+  }
+
+  // E-Control attribution + brand-link footer. Mirrors the Ladestellen
+  // Austria card. When logo_adapt_to_theme is on, the SVG renders as a
+  // theme-following silhouette; otherwise it stays in its native colour.
+  // Suppressed entirely when hide_attribution is true.
+  private _renderFooter(
+    attribution: string | undefined,
+  ): TemplateResult | typeof nothing {
+    if (this._config?.hide_attribution === true) return nothing;
+    const adaptive = this._config?.logo_adapt_to_theme === true;
+    const darkMode = Boolean(
+      (this.hass?.themes as { darkMode?: boolean } | undefined)?.darkMode,
+    );
+    const logoClasses = adaptive
+      ? `brand-logo adaptive ${darkMode ? "adaptive-dark" : "adaptive-light"}`
+      : "brand-logo";
+    const text =
+      attribution && attribution.includes("E-Control")
+        ? attribution
+        : ATTRIBUTION_REQUIRED;
+    return html`
+      <div class="footer">
+        <a
+          class="brand-link"
+          href=${safeHttpsUri(E_CONTROL_HOMEPAGE)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="E-Control"
+          @click=${(ev: Event) => ev.stopPropagation()}
+        >
+          <img
+            class=${logoClasses}
+            src=${E_CONTROL_LOGO_URL}
+            alt="E-Control"
+          />
+        </a>
+        <span class="attribution-text">${text}</span>
+      </div>
+    `;
+  }
+
+  private _renderVersionBanner(): TemplateResult | typeof nothing {
+    // If the user already clicked reload in this session and the version
+    // we just saw from the backend is still ahead of CARD_VERSION, the
+    // reload didn't pick up the new bundle (likely a stuck SW/CDN cache).
+    // Switch the banner to a stuck-state message so the user isn't
+    // trapped in a reload → banner → reload loop.
+    const stuck =
+      this._versionMismatch !== null &&
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem(
+        `tsa-reload-attempted-${this._versionMismatch}`,
+      ) === "1";
+    return renderVersionBanner({
+      mismatchVersion: this._versionMismatch,
+      stuck,
+      t: (key, repl) => this._t(key, repl),
+      onReload: this._onVersionReload,
+      onDismiss: this._onDismissVersionBanner,
+    });
+  }
+
+  private _onDismissVersionBanner = (): void => {
+    this._versionMismatch = null;
+  };
+
+  private _renderTabs(
+    entities: TankstellenEntity[],
+    activeTab: number,
+  ): TemplateResult | typeof nothing {
+    if (entities.length <= 1) return nothing;
+    const customLabels: Record<string, string> = this._config.tab_labels ?? {};
+    return html`
+      <div class="tabs" role="tablist">
+        ${entities.map((e, i) => {
+          const custom = customLabels[e.entity_id];
+          let label: string;
+          if (typeof custom === "string" && custom.trim().length > 0) {
+            label = custom;
+          } else {
+            const ft = e.attributes.fuel_type ?? "";
+            label = getFuelName(ft, this._ctx());
+            if (e.attributes.dynamic_mode === true) {
+              const trackerLabel = e.attributes.dynamic_tracker_label;
+              if (trackerLabel) label += ` · ${trackerLabel}`;
+            }
+          }
+          const selected = i === activeTab;
+          return html`
+            <button
+              type="button"
+              role="tab"
+              class=${classMap({ tab: true, active: selected })}
+              aria-selected=${selected ? "true" : "false"}
+              tabindex=${selected ? "0" : "-1"}
+              @click=${() => this._onTabClick(i)}
+              @keydown=${(ev: KeyboardEvent) =>
+                this._onTabKeydown(ev, i, entities.length)}
+            >
+              ${label}
+            </button>
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  private _renderHeader(
+    active: TankstellenEntity,
+  ): TemplateResult | typeof nothing {
+    if (this._config?.hide_header === true) return nothing;
+    const fuelType = active.attributes.fuel_type ?? "";
+    const fuelTypeName =
+      active.attributes.fuel_type_name || getFuelName(fuelType, this._ctx());
+    const isDynamic = active.attributes.dynamic_mode === true;
+
+    let subtitle: string | null = null;
+    if (isDynamic) {
+      subtitle = active.attributes.dynamic_tracker_label ?? null;
+    }
+
+    return html`
+      <header class="header">
+        <div class="icon-tile" aria-hidden="true">
+          <ha-icon icon="mdi:gas-station"></ha-icon>
+        </div>
+        <div class="header-text">
+          <h2 class="title">${fuelTypeName}</h2>
+          ${subtitle
+            ? html`<p class="subtitle">${subtitle}</p>`
+            : nothing}
+        </div>
+        ${isDynamic
+          ? html`
+              <div class="header-actions">
+                ${this._renderRefreshButton()}
+                ${this._renderDynamicChips(active)}
+              </div>
+            `
+          : nothing}
+      </header>
+    `;
+  }
+
+  private _renderDynamicChips(
+    active: TankstellenEntity,
+  ): TemplateResult | typeof nothing {
+    const hasLastUpdated = !!active.last_updated;
+    if (!hasLastUpdated && !this._noNewData) return nothing;
+    return html`
+      <div class="chip-row" aria-live="polite">
+        ${hasLastUpdated
+          ? html`<span class="chip muted">
+              <ha-icon icon="mdi:clock-outline" aria-hidden="true"></ha-icon>
+              <ha-relative-time
+                .hass=${this.hass}
+                .datetime=${new Date(active.last_updated as string)}
+              ></ha-relative-time>
+            </span>`
+          : nothing}
+        ${this._noNewData
+          ? html`<span class="chip warn" role="status">
+              <ha-icon icon="mdi:alert-circle-outline" aria-hidden="true"></ha-icon>
+              ${this._t("no_new_data")}
+            </span>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderRefreshButton(): TemplateResult {
+    const remainingMs =
+      DYNAMIC_MANUAL_COOLDOWN_MS - (Date.now() - this._lastManualRefresh);
+    const cooling = remainingMs > 0;
+    const countdownText = cooling
+      ? (() => {
+          const s = Math.ceil(remainingMs / 1000);
+          return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        })()
+      : "";
+
+    return html`
+      <button
+        class=${classMap({ "btn-primary": true, cooling })}
+        type="button"
+        aria-label=${this._t("refresh")}
+        aria-disabled=${cooling ? "true" : "false"}
+        @click=${this._onRefresh}
+      >
+        <ha-icon icon="mdi:refresh" aria-hidden="true"></ha-icon>
+        <span>${cooling ? countdownText : this._t("refresh")}</span>
+      </button>
+    `;
+  }
+
+  private _renderHero(
+    active: TankstellenEntity,
+  ): TemplateResult | typeof nothing {
+    const stations: Station[] = active.attributes.stations ?? [];
+    if (!stations.length) return nothing;
+
+    const isDynamic = active.attributes.dynamic_mode === true;
+    const cheapest = stations[0]?.price;
+    const avgPrice = active.attributes.average_price;
+
+    // Dynamic mode: no hero metric (last-updated + no_new_data chips
+    // live next to the refresh button in the header).
+    if (isDynamic) return nothing;
+
+    // User-suppressed hero (hide_header_price toggle).
+    if (this._config.hide_header_price === true) return nothing;
+
+    // Static-mode hero: stacked metric (cheapest large, "/ avg" small,
+    // UPPERCASE label below).
+    if (cheapest == null) return nothing;
+    return html`
+      <div class="hero">
+        <div class="metric">
+          <div class="metric-value">
+            <span class="metric-num">${formatPrice(cheapest)}</span>
+            ${avgPrice != null
+              ? html`<span class="metric-of"
+                  >/ ${formatPrice(avgPrice)} ${this._t("average")}</span
+                >`
+              : nothing}
+          </div>
+          <div class="metric-label">${this._t("cheapest")}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderSparklineBlock(
+    active: TankstellenEntity,
+  ): TemplateResult | typeof nothing {
+    const isDynamic = active.attributes.dynamic_mode === true;
+    if (isDynamic) return nothing;
+    if (this._config.show_history === false) return nothing;
+    return this._renderSparkline(active);
+  }
+
+  private _renderSparkline(
+    active: TankstellenEntity,
+  ): TemplateResult | typeof nothing {
+    const entityId = active.entity_id;
+    const points = this._history[entityId] ?? [];
+    if (points.length < 2) return nothing;
+
+    const showMedianLine = this._config.show_median_line === true;
+    const showHourEnvelope = this._config.show_hour_envelope === true;
+    const showNoonMarkers = this._config.show_noon_markers === true;
+    const showMinMax = this._config.show_minmax !== false;
+    const envelope: HourlyEnvelope | null = showHourEnvelope
+      ? buildHourlyEnvelope(points)
+      : null;
+
+    const showBestRefuel = this._config.show_best_refuel !== false;
+    const analysis = showBestRefuel ? analyzeBestRefuel(points) : null;
+
+    const result = buildSparkline({
+      points,
+      showMedianLine,
+      showHourEnvelope,
+      showNoonMarkers,
+      showMinMax,
+      hourEnvelope: envelope,
+      analysis,
+      translations: {
+        min_label: this._t("min_label"),
+        max_label: this._t("max_label"),
+        last_7_days: this._t("last_7_days"),
+        median_delta_below: this._t("median_delta_below"),
+        median_delta_above: this._t("median_delta_above"),
+        median_delta_equal: this._t("median_delta_equal"),
+        sparkline_aria_summary: this._t("sparkline_aria_summary"),
+        sparkline_aria_simple: this._t("sparkline_aria_simple"),
+      },
+    });
+    if (result.template === nothing) return nothing;
+
+    return html`
+      <div
+        class="sparkline-container"
+        data-entity=${entityId}
+        role="button"
+        tabindex="0"
+        aria-label=${this._t("sparkline_open_more_info")}
+        @click=${() => this._onSparklineClick(entityId)}
+        @keydown=${(ev: KeyboardEvent) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            this._onSparklineClick(entityId);
+          }
+        }}
+      >
+        ${result.template}
+        ${this._renderRecommendation(analysis)}
+      </div>
+    `;
+  }
+
+  private _renderRecommendation(
+    analysis: BestRefuelResult | null,
+  ): TemplateResult | typeof nothing {
+    if (!analysis) return nothing;
+    if (!analysis.hasEnoughData) {
+      return html`
+        <div class="refuel-hint">
+          <ha-icon icon="mdi:information-outline" class="refuel-icon" aria-hidden="true"></ha-icon>
+          ${this._t("not_enough_data_hint")}
+        </div>
+      `;
+    }
+    const hour = analysis.hour ?? 0;
+    const hourEnd = analysis.hour_end ?? (hour + 1) % 24;
+    const h1 = String(hour).padStart(2, "0");
+    const h2 = String(hourEnd).padStart(2, "0");
+
+    let text: string;
+    if (analysis.weekday != null) {
+      const weekdays = getWeekdays(this._ctx());
+      const day = weekdays[analysis.weekday] ?? "";
+      text = this._t("best_refuel_hour_weekday", { h1, h2, day });
+    } else {
+      text = this._t("best_refuel_hour", { h1, h2 });
+    }
+
+    const c = analysis.confidence;
+    if (!c) {
+      return html`
+        <div class="refuel-recommendation">
+          <ha-icon icon="mdi:lightbulb-outline" class="refuel-icon" aria-hidden="true"></ha-icon>
+          <span class="refuel-text">${text}</span>
+        </div>
+      `;
+    }
+
+    const levelLabel = this._t(`confidence_${c.level}`);
+    // One breakdown string drives both `title` (desktop hover tooltip) and
+    // `aria-label` (screen-reader name). The HTML title attribute collapses
+    // newlines to spaces, so we use ". " as the visual separator and rely
+    // on the browser's own line-wrapping for the tooltip.
+    const breakdownParts: string[] = [
+      `${this._t("confidence_title")}: ${levelLabel}`,
+      `${this._t("confidence_span")}: ${c.span_days} ${this._t("confidence_days")}`,
+      `${this._t("confidence_coverage")}: ${c.coverage_pct}%`,
+      `${this._t("confidence_gap")}: ${c.gap_cents.toFixed(1)} ${this._t("confidence_cents")}`,
+    ];
+    if (c.span_days < 14) {
+      breakdownParts.push(this._t("confidence_short_history_hint"));
+    }
+    const breakdown = breakdownParts.join(". ");
+    const badgeClass = `refuel-confidence refuel-confidence-${c.level}`;
+
+    return html`
+      <div class="refuel-recommendation">
+        <ha-icon icon="mdi:lightbulb-outline" class="refuel-icon" aria-hidden="true"></ha-icon>
+        <span class="refuel-text">${text}</span>
+        <span
+          class=${badgeClass}
+          title=${breakdown}
+          aria-label=${breakdown}
+        >${levelLabel}</span>
+      </div>
+    `;
+  }
+
+  private _renderCars(active: TankstellenEntity): TemplateResult | typeof nothing {
+    const stations: Station[] = active.attributes.stations ?? [];
+    if (!stations.length) return nothing;
+
+    const showCars = this._config.show_cars === true;
+    const showCarFillup = this._config.show_car_fillup !== false;
+    const showCarConsumption = this._config.show_car_consumption !== false;
+    if (!showCars || (!showCarFillup && !showCarConsumption)) return nothing;
+
+    const fuelType = active.attributes.fuel_type ?? "";
+    const paymentFilter = this._config.payment_filter ?? [];
+    const highlightMode = this._config.payment_highlight_mode === true;
+
+    // Cars must match the *active* fuel type. Backed by the full config list.
+    const rawCars: CarConfig[] = (this._config.cars ?? []).filter(
+      (c) => c.fuel_type === fuelType && c.tank_size > 0 && c.name,
+    );
+    const cars = showCarFillup
+      ? rawCars
+      : rawCars.filter((c) => Number(c.consumption) > 0);
+    if (!cars.length) return nothing;
+
+    // In filter mode use cheapest visible station (post-filter). In
+    // highlight mode all stations are visible, so use overall cheapest.
+    const filteredStations = highlightMode
+      ? stations
+      : stations.filter((s) => matchesPaymentFilter(s, paymentFilter));
+    const effectiveCheapest = highlightMode
+      ? stations[0]?.price
+      : filteredStations[0]?.price;
+
+    return html`
+      <div class="cars-fillup">
+        ${cars.map((car) =>
+          this._renderCarRow(car, effectiveCheapest, showCarFillup, showCarConsumption),
+        )}
+      </div>
+    `;
+  }
+
+  private _renderCarRow(
+    car: CarConfig,
+    cheapest: number | undefined,
+    showCarFillup: boolean,
+    showCarConsumption: boolean,
+  ): TemplateResult {
+    const consumption = Number(car.consumption);
+    const consumptionStr =
+      Number.isFinite(consumption) && consumption > 0
+        ? consumption.toFixed(1).replace(".", ",")
+        : "";
+
+    if (showCarFillup) {
+      const costStr =
+        cheapest != null
+          ? `€ ${(cheapest * Number(car.tank_size)).toFixed(2).replace(".", ",")}`
+          : "–";
+      const per100Str =
+        cheapest != null && consumption > 0
+          ? `€ ${(cheapest * consumption).toFixed(2).replace(".", ",")}`
+          : "–";
+      return html`
+        <div class="car-fillup-row">
+          <span class="car-fillup-name">
+            <ha-icon icon=${car.icon || "mdi:car"} class="car-icon" aria-hidden="true"></ha-icon>
+            ${car.name}
+            <span class="car-fillup-liters">${car.tank_size} L</span>
+          </span>
+          <span class="car-fillup-cost">${costStr}</span>
+        </div>
+        ${showCarConsumption && consumption > 0
+          ? html`
+              <div class="car-per100-row">
+                <span class="car-per100-label">${consumptionStr} l/100 km</span>
+                <span class="car-per100-cost">${per100Str} / 100 km</span>
+              </div>
+            `
+          : nothing}
+      `;
+    }
+
+    // consumption-only mode — reuses .car-fillup-row styling
+    const per100Str =
+      cheapest != null
+        ? `€ ${(cheapest * consumption).toFixed(2).replace(".", ",")}`
+        : "–";
+    return html`
+      <div class="car-fillup-row">
+        <span class="car-fillup-name">
+          <ha-icon icon=${car.icon || "mdi:car"} class="car-icon" aria-hidden="true"></ha-icon>
+          ${car.name}
+          <span class="car-fillup-liters">${consumptionStr} l/100 km</span>
+        </span>
+        <span class="car-fillup-cost">${per100Str} / 100 km</span>
+      </div>
+    `;
+  }
+
+  private _renderStationList(
+    active: TankstellenEntity,
+    activeTab: number,
+  ): TemplateResult | typeof nothing {
+    const stations: Station[] = active.attributes.stations ?? [];
+    const parsedMax = parseInt(String(this._config.max_stations), 10);
+    const maxStations = Number.isFinite(parsedMax)
+      ? Math.max(0, Math.min(5, parsedMax))
+      : 5;
+    const paymentFilter = this._config.payment_filter ?? [];
+    const highlightMode = this._config.payment_highlight_mode === true;
+
+    const filtered = highlightMode
+      ? stations
+      : stations.filter((s) => matchesPaymentFilter(s, paymentFilter));
+
+    // 0 hides the station list entirely — don't show a fallback message.
+    if (maxStations === 0) return nothing;
+
+    if (!filtered.length && paymentFilter.length && stations.length) {
+      return html`
+        <div class="empty">
+          ${this._t("payment_filter_active")} — ${this._t("no_data")}
+        </div>
+      `;
+    }
+    if (!filtered.length) {
+      return html`<div class="empty">${this._t("no_data")}</div>`;
+    }
+
+    // Opt-in re-sort: the integration delivers stations cheapest-first;
+    // when enabled, order by Luftlinie instead. `sort` is stable, so
+    // stations without a stamped `distance_m` sink to the tail while
+    // keeping their cheapest-first order among themselves.
+    const ordered =
+      this._config.sort_by_distance === true
+        ? [...filtered].sort(
+            (a, b) =>
+              (a.distance_m ?? Number.POSITIVE_INFINITY) -
+              (b.distance_m ?? Number.POSITIVE_INFINITY),
+          )
+        : filtered;
+
+    const display = ordered.slice(0, maxStations);
+    return html`
+      <div class="stations">
+        ${display.map((s, idx) =>
+          this._renderStation(s, idx, activeTab, paymentFilter, highlightMode),
+        )}
+      </div>
+    `;
+  }
+
+  private _renderStation(
+    s: Station,
+    idx: number,
+    activeTab: number,
+    paymentFilter: readonly string[],
+    highlightMode: boolean,
+  ): TemplateResult {
+    const showIndex = this._config.show_index !== false;
+    const showMapLinks = this._config.show_map_links !== false;
+    // Opt-in: render only when explicitly enabled. An existing card config
+    // predating this feature has no `show_distance` key, so it stays hidden
+    // (and the editor toggle, which reads absent as off, agrees). New cards
+    // get `show_distance: true` from getStubConfig, so the feature shows by
+    // default there while toggle and behaviour stay consistent.
+    const showDistance = this._config.show_distance === true;
+    const showHours = this._config.show_opening_hours !== false;
+    const showPayment = this._config.show_payment_methods !== false;
+    const loc = s.location ?? {};
+
+    // Key the expanded-state on station identity, not list position.
+    // Stations are sorted cheapest-first by the integration, so position
+    // shifts whenever prices update — keying on `${activeTab}-${idx}` would
+    // leave the detail panel attached to whichever station now occupies the
+    // old slot. `name|address` is the stable identifier the API exposes; the
+    // tab prefix keeps state per-fuel-type even though `_onTabClick` already
+    // clears the set on tab switch (belt-and-braces).
+    const key = `${activeTab}|${s.name ?? ""}|${loc.address ?? ""}`;
+    const isExpanded = this._expandedStations.has(key);
+    const isClosed = s.open === false;
+    const isClosingSoonFlag = !isClosed && isClosingSoon(s);
+
+    const highlighted =
+      highlightMode &&
+      paymentFilter.length > 0 &&
+      matchesPaymentFilter(s, paymentFilter);
+    const matchChips = highlighted
+      ? matchingPaymentMethods(s, paymentFilter, {
+          cash: this._t("cash"),
+          debit_card: this._t("debit_card"),
+          credit_card: this._t("credit_card"),
+        })
+      : [];
+
+    const hasHoursBlock = showHours && !!s.opening_hours?.length;
+    const hasPaymentBlock = showPayment && hasPaymentMethods(s.payment_methods);
+    const hasDetail = hasHoursBlock || hasPaymentBlock;
+
+    const rowLabel = [
+      s.name || "–",
+      loc.city ?? "",
+      formatPrice(s.price),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const detailId = hasDetail ? `tsa-station-detail-${activeTab}-${idx}` : undefined;
+    const hasName = !!s.name;
+    const cityText = loc.city ?? "";
+    const addressText = loc.address ?? "";
+    // Build the address row from whichever parts the API supplied. Rural
+    // stations often have only a postal code (no city, no street); the
+    // previous template emitted a literal comma + space regardless, which
+    // rendered as e.g. "4310 ," for those. Locality (PLZ + city) and street
+    // each get their own `<span lang="de">` for screen-reader pronunciation
+    // and join with ", " only when both are present.
+    const localityText = [loc.postalCode, cityText]
+      .filter((p): p is string | number => p != null && p !== "")
+      .join(" ");
+    const localityTpl = localityText
+      ? html`<span lang="de">${localityText}</span>`
+      : nothing;
+    const addressTpl = addressText
+      ? html`<span lang="de">${addressText}</span>`
+      : nothing;
+    const addressSeparator =
+      localityTpl !== nothing && addressTpl !== nothing ? ", " : "";
+    return html`
+      <div class=${classMap({ station: true, "pm-highlight": highlighted })}>
+        <div
+          class="station-main"
+          role=${hasDetail ? "button" : "group"}
+          tabindex=${hasDetail ? "0" : "-1"}
+          aria-expanded=${hasDetail ? (isExpanded ? "true" : "false") : nothing}
+          aria-controls=${detailId ?? nothing}
+          aria-label=${rowLabel}
+          @click=${() => this._onStationClick(key)}
+          @keydown=${(ev: KeyboardEvent) =>
+            this._onStationKeydown(ev, key, hasDetail)}
+        >
+          ${showIndex
+            ? html`<div class="index-tile" aria-hidden="true">${idx + 1}</div>`
+            : nothing}
+          <div class="info">
+            <div class="name">
+              ${hasName
+                ? html`<span lang="de">${s.name}</span>`
+                : "–"}
+              ${isClosed
+                ? html`<span class="flag closed">${this._t("closed")}</span>`
+                : isClosingSoonFlag
+                  ? html`<span class="flag closing-soon"
+                      >${this._t("closing_soon")}</span
+                    >`
+                  : nothing}
+              ${matchChips.map(
+                (m) => html`<span class="chip match">${m}</span>`,
+              )}
+            </div>
+            <div class="address">
+              ${localityTpl}${addressSeparator}${addressTpl}
+            </div>
+          </div>
+          <div class="price">${formatPrice(s.price)}</div>
+          ${(() => {
+            // Map-pin link to Google Maps, with the Luftlinie distance as a
+            // caption beneath it. Both are optional and independently toggled.
+            let pin: TemplateResult | typeof nothing = nothing;
+            if (showMapLinks) {
+              const linkKind = resolveMapLinkKind(
+                this._config.map_provider ?? "auto",
+                detectNavPlatform(
+                  navigator.userAgent,
+                  navigator.maxTouchPoints,
+                ),
+              );
+              const url = safeNavUri(mapsUrl(loc, s.name ?? "", linkKind));
+              // mapsUrl returns null when neither a station name nor any
+              // location field is available — and safeNavUri returns ""
+              // for URIs outside its allowlist. Either way, skip the <a>
+              // rather than emit an empty href that would reload the page
+              // on click. geo: URIs must navigate in-tab (`_self`) so the
+              // OS intercepts them as an intent; a new tab would be left
+              // blank even when the chooser opens.
+              if (url) {
+                pin = html`
+                  <a
+                    class="icon-action map"
+                    href=${url}
+                    target=${url.startsWith("geo:") ? "_self" : "_blank"}
+                    rel="noopener noreferrer"
+                    aria-label=${`${this._t("map")}: ${s.name ?? ""}`}
+                    title=${this._t("map")}
+                    @click=${this._onMapLinkClick}
+                  >
+                    <ha-icon
+                      icon=${/\d/.test(loc.address ?? "")
+                        ? "mdi:map-marker"
+                        : "mdi:magnify"}
+                      aria-hidden="true"
+                    ></ha-icon>
+                  </a>
+                `;
+              }
+            }
+
+            const distance =
+              showDistance && s.distance_m != null
+                ? html`<span class="distance" lang="de"
+                    >${formatDistance(s.distance_m)}</span
+                  >`
+                : nothing;
+
+            if (pin === nothing && distance === nothing) return nothing;
+            return html`<div
+              class=${classMap({
+                "map-action": true,
+                "has-distance": distance !== nothing,
+              })}
+            >
+              ${pin}${distance}
+            </div>`;
+          })()}
+          ${hasDetail
+            ? html`<ha-icon
+                class="expander-chevron"
+                icon="mdi:chevron-down"
+                aria-hidden="true"
+              ></ha-icon>`
+            : nothing}
+        </div>
+        ${hasDetail
+          ? html`
+              <div
+                id=${detailId!}
+                class=${classMap({ "station-detail": true, expanded: isExpanded })}
+              >
+                <div class="detail-cols">
+                  ${hasHoursBlock
+                    ? html`<div class="detail-col">${this._renderHours(s.opening_hours ?? [])}</div>`
+                    : nothing}
+                  ${hasPaymentBlock
+                    ? html`<div class="detail-col">${this._renderPaymentMethods(s.payment_methods)}</div>`
+                    : nothing}
+                </div>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderHours(hours: OpeningHours[]): TemplateResult {
+    // E-Control groups Mon-Fri under "MO". Fall back to positional indexing
+    // when the day code isn't set (old feed shape).
+    const mo = hours.find((h) => h.day === "MO") ?? hours[0];
+    const sa = hours.find((h) => h.day === "SA") ?? hours[5];
+    const so = hours.find((h) => h.day === "SO") ?? hours[6];
+    const fe = hours.find((h) => h.day === "FE");
+    return html`
+      <div class="hours-grid">
+        ${mo
+          ? html`<span class="day">${this._t("mon_fri")}</span><span>${mo.from} – ${mo.to}</span>`
+          : nothing}
+        ${sa
+          ? html`<span class="day">${this._t("sat")}</span><span>${sa.from} – ${sa.to}</span>`
+          : nothing}
+        ${so
+          ? html`<span class="day">${this._t("sun")}</span><span>${so.from} – ${so.to}</span>`
+          : nothing}
+        ${fe
+          ? html`<span class="day">${this._t("holiday")}</span><span>${fe.from} – ${fe.to}</span>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderPaymentMethods(
+    pm: PaymentMethods | undefined,
+  ): TemplateResult | typeof nothing {
+    if (!pm) return nothing;
+    const badges: TemplateResult[] = [];
+    if (pm.cash) {
+      badges.push(html`
+        <span class="pm-badge">
+          <ha-icon icon="mdi:cash" class="pm-icon" aria-hidden="true"></ha-icon>
+          ${this._t("cash")}
+        </span>
+      `);
+    }
+    if (pm.debit_card) {
+      badges.push(html`
+        <span class="pm-badge">
+          <ha-icon icon="mdi:credit-card" class="pm-icon" aria-hidden="true"></ha-icon>
+          ${this._t("debit_card")}
+        </span>
+      `);
+    }
+    if (pm.credit_card) {
+      badges.push(html`
+        <span class="pm-badge">
+          <ha-icon icon="mdi:credit-card" class="pm-icon" aria-hidden="true"></ha-icon>
+          ${this._t("credit_card")}
+        </span>
+      `);
+    }
+    for (const other of pm.others ?? []) {
+      badges.push(html`<span class="pm-badge pm-other">${other}</span>`);
+    }
+    if (!badges.length) return nothing;
+    return html`
+      <div class="pm-section">
+        <div class="pm-label">${this._t("payment")}</div>
+        <div class="pm-badges">${badges}</div>
+      </div>
+    `;
+  }
+
+  // --- Event handlers ---
+
+  private _onTabClick(index: number): void {
+    if (this._activeTab === index) return;
+    this._activeTab = index;
+    // New Set so Lit's shouldUpdate sees a reference change and re-renders.
+    this._expandedStations = new Set();
+  }
+
+  // WAI-ARIA tab pattern: arrow keys move focus and activate; Home/End
+  // jump to the first/last tab. After switching we focus the newly-active
+  // tab so keyboard users see the focus ring follow their selection.
+  private _onTabKeydown(ev: KeyboardEvent, index: number, count: number): void {
+    let next = index;
+    switch (ev.key) {
+      case "ArrowRight":
+        next = (index + 1) % count;
+        break;
+      case "ArrowLeft":
+        next = (index - 1 + count) % count;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = count - 1;
+        break;
+      default:
+        return;
+    }
+    ev.preventDefault();
+    this._onTabClick(next);
+    this.updateComplete.then(() => {
+      const tabs = this.shadowRoot?.querySelectorAll<HTMLButtonElement>(
+        '.tabs [role="tab"]',
+      );
+      tabs?.[next]?.focus();
+    });
+  }
+
+  private _onStationClick(key: string): void {
+    const next = new Set(this._expandedStations);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._expandedStations = next;
+  }
+
+  private _onStationKeydown(
+    ev: KeyboardEvent,
+    key: string,
+    hasDetail: boolean,
+  ): void {
+    if (!hasDetail) return;
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.preventDefault();
+    this._onStationClick(key);
+  }
+
+  private _onMapLinkClick(e: Event): void {
+    e.stopPropagation();
+  }
+
+  private _onSparklineClick(entityId: string): void {
+    // Same behaviour as clicking a sensor in HA — open the more-info dialog.
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", {
+        detail: { entityId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private _onRefresh(): void {
+    if (!this.hass) return;
+    const now = Date.now();
+    if (now - this._lastManualRefresh < DYNAMIC_MANUAL_COOLDOWN_MS) return;
+    this._lastManualRefresh = now;
+    this._noNewData = false;
+
+    const entities = this._resolveEntities();
+    const active = entities[this._activeTab] ?? entities[0];
+    const preRefreshTimestamp = active?.last_updated;
+
+    for (const e of entities) {
+      const p = this.hass.callService("homeassistant", "update_entity", {
+        entity_id: e.entity_id,
+      });
+      if (p && typeof (p as Promise<void>).catch === "function") {
+        (p as Promise<void>).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[Tankstellen Austria] update_entity failed for",
+            e.entity_id,
+            err,
+          );
+        });
+      }
+    }
+
+    // After HA has had time to fetch, check if data actually changed.
+    if (this._postRefreshTimeout !== undefined) {
+      clearTimeout(this._postRefreshTimeout);
+    }
+    this._postRefreshTimeout = window.setTimeout(() => {
+      this._postRefreshTimeout = undefined;
+      try {
+        const updated = this._resolveEntities();
+        const updatedActive = updated[this._activeTab] ?? updated[0];
+        if (updatedActive?.last_updated === preRefreshTimestamp) {
+          this._noNewData = true;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[Tankstellen Austria] post-refresh check failed", err);
+      }
+    }, 3000);
+
+    // Per-second re-render so the countdown stays live. Skipped when the
+    // user prefers reduced motion — WCAG 2.2.2 (animation > 5s needs a way
+    // to pause); a single wake-up at the end of the cooldown is enough.
+    if (this._cooldownInterval !== undefined) {
+      clearInterval(this._cooldownInterval);
+    }
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      if (this._cooldownTimeout !== undefined) {
+        clearTimeout(this._cooldownTimeout);
+      }
+      this._cooldownTimeout = window.setTimeout(() => {
+        this._cooldownTimeout = undefined;
+        this._cooldownTick = (this._cooldownTick + 1) % 1_000_000;
+      }, DYNAMIC_MANUAL_COOLDOWN_MS);
+    } else {
+      this._cooldownInterval = window.setInterval(() => {
+        if (Date.now() - this._lastManualRefresh >= DYNAMIC_MANUAL_COOLDOWN_MS) {
+          if (this._cooldownInterval !== undefined) {
+            clearInterval(this._cooldownInterval);
+            this._cooldownInterval = undefined;
+          }
+        }
+        this._cooldownTick = (this._cooldownTick + 1) % 1_000_000;
+      }, 1000);
+    }
+  }
+
+  private _onVersionReload = async (): Promise<void> => {
+    // Flag this target version as "user tried reload" before the page
+    // unloads, so on re-render the banner flips to the stuck-state
+    // variant instead of a second reload button.
+    if (this._versionMismatch) {
+      try {
+        sessionStorage.setItem(
+          `tsa-reload-attempted-${this._versionMismatch}`,
+          "1",
+        );
+      } catch {
+        // sessionStorage can be disabled in private browsing — fall through.
+      }
+    }
+    await reloadAfterCacheWipe();
+  };
+
+  static override styles: CSSResultGroup = cardStyles;
+}

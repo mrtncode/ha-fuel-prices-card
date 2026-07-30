@@ -1,0 +1,17 @@
+{
+  "name": "ha-fuel-prices-card",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "devDependencies": {
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "lit": "^3.3.2"
+  }
+}
