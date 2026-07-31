@@ -121,6 +121,81 @@ export class TankstellenAustriaCardEditor
     fireEvent(this, "config-changed", { config: { ...this._config } });
   }
 
+  private _entityLabel(entityId: string): string {
+    const state = this.hass?.states[entityId];
+    if (!state) return entityId;
+    const attrs = state.attributes as Record<string, unknown> & {
+      station_name?: string;
+      device?: string;
+      friendly_name?: string;
+      fuel_type?: string;
+      fuel_type_name?: string;
+    };
+    const base =
+      typeof attrs.station_name === "string" && attrs.station_name.trim()
+        ? attrs.station_name.trim()
+        : typeof attrs.device === "string" && attrs.device.trim()
+          ? attrs.device.trim()
+          : typeof attrs.friendly_name === "string" && attrs.friendly_name.trim()
+            ? attrs.friendly_name.trim()
+            : entityId;
+        const fuelType = typeof attrs.fuel_type === "string" ? attrs.fuel_type : undefined;
+        const fuelTypeLabel =
+          fuelType?.toLowerCase() === "diesel"
+            ? "DIE"
+            : fuelType?.toLowerCase() === "super" ||
+                fuelType?.toLowerCase() === "super95" ||
+                fuelType?.toLowerCase() === "e5" ||
+                fuelType?.toLowerCase() === "95"
+              ? "SUP"
+              : fuelType?.toLowerCase() === "cng" || fuelType?.toLowerCase() === "gas"
+                ? "GAS"
+                : fuelType;
+    const fuelName =
+      typeof attrs.fuel_type_name === "string" && attrs.fuel_type_name.trim()
+        ? attrs.fuel_type_name.trim()
+            : getFuelName(fuelTypeLabel ?? entityId, this._ctx());
+    if (fuelName && !base.toLowerCase().includes(fuelName.toLowerCase())) {
+      return `${base} · ${fuelName}`;
+    }
+    return base;
+  }
+
+  private _commitEntities(entityIds: string[]): void {
+    const cleaned = entityIds.map((eid) => sanitizeShort(eid)).filter(Boolean);
+    const next: TankstellenAustriaCardConfig = { ...this._config };
+    if (cleaned.length) next.entities = cleaned;
+    else delete next.entities;
+    this._config = next;
+    this._fireChanged();
+  }
+
+  private _onEntityChange(idx: number, e: Event): void {
+    e.stopPropagation();
+    const target = e.target as HTMLInputElement;
+    const value = sanitizeShort(target.value);
+    const current = [...(this._config.entities ?? [])];
+    if (value) {
+      current[idx] = value;
+    } else {
+      current.splice(idx, 1);
+    }
+    this._commitEntities(current);
+  }
+
+  private _onAddEntity(): void {
+    const current = [...(this._config.entities ?? [])];
+    current.push("");
+    this._commitEntities(current);
+  }
+
+  private _onDeleteEntity(e: Event, idx: number): void {
+    e.stopPropagation();
+    const current = [...(this._config.entities ?? [])];
+    current.splice(idx, 1);
+    this._commitEntities(current);
+  }
+
   // ------------------------------------------------------------------
   // ha-form schema
   // ------------------------------------------------------------------
@@ -131,25 +206,8 @@ export class TankstellenAustriaCardEditor
   private _schema(): ReadonlyArray<HaFormSchema> {
     const showHistory = this._config.show_history !== false;
     const showCars = this._config.show_cars === true;
-    const showPayment = this._config.show_payment_methods !== false;
-    const paymentFilter = this._config.payment_filter ?? [];
 
     const schema: HaFormSchema[] = [
-      {
-        // Filter to tankstellen-austria sensors only — picking an
-        // unrelated `sensor.*` would render an empty card.
-        // `multiple: true` enables multi-fuel-type picking. Output is
-        // a flat string[] which matches the storage shape (no
-        // translation needed, unlike the nextbike Array<{entity}> form).
-        name: "entities",
-        selector: {
-          entity: {
-            domain: "sensor",
-            integration: "tankstellen_austria",
-            multiple: true,
-          },
-        },
-      },
       {
         // `flatten: true` is non-negotiable. Without it every toggle
         // below would write to `data.display.<name>` and the card's
@@ -161,33 +219,8 @@ export class TankstellenAustriaCardEditor
         title: this._et("section_display"),
         flatten: true,
         schema: [
-          {
-            name: "max_stations",
-            selector: {
-              number: { min: 0, max: 5, step: 1, mode: "slider" },
-            },
-          },
           { name: "hide_header", selector: { boolean: {} } },
           { name: "hide_header_price", selector: { boolean: {} } },
-          { name: "show_index", selector: { boolean: {} } },
-          { name: "show_map_links", selector: { boolean: {} } },
-          {
-            name: "map_provider",
-            selector: {
-              select: {
-                mode: "dropdown",
-                options: [
-                  { value: "auto", label: this._et("map_provider_auto") },
-                  { value: "google", label: this._et("map_provider_google") },
-                  { value: "apple", label: this._et("map_provider_apple") },
-                ],
-              },
-            },
-          },
-          { name: "show_distance", selector: { boolean: {} } },
-          { name: "sort_by_distance", selector: { boolean: {} } },
-          { name: "show_opening_hours", selector: { boolean: {} } },
-          { name: "show_payment_methods", selector: { boolean: {} } },
           { name: "show_history", selector: { boolean: {} } },
         ],
       },
@@ -227,32 +260,6 @@ export class TankstellenAustriaCardEditor
         schema: carsSubSchema,
       });
     }
-
-    if (showPayment && paymentFilter.length > 0) {
-      // Highlight-mode is only meaningful when at least one filter chip
-      // is active — gating the expandable entirely is clearer than
-      // showing a disabled toggle.
-      schema.push({
-        type: "expandable",
-        name: "payment_options",
-        title: this._et("section_payment_filter"),
-        flatten: true,
-        schema: [
-          { name: "payment_highlight_mode", selector: { boolean: {} } },
-        ],
-      });
-    }
-
-    schema.push({
-      type: "expandable",
-      name: "branding",
-      title: this._et("section_branding"),
-      flatten: true,
-      schema: [
-        { name: "logo_adapt_to_theme", selector: { boolean: {} } },
-        { name: "hide_attribution", selector: { boolean: {} } },
-      ],
-    });
 
     return schema;
   }
@@ -333,6 +340,7 @@ export class TankstellenAustriaCardEditor
 
     return html`
       <div class="editor">
+        ${this._renderEntitiesSection()}
         <ha-form
           .hass=${this.hass}
           .data=${{
@@ -358,8 +366,48 @@ export class TankstellenAustriaCardEditor
 
         ${showRecorderHint ? this._renderRecorderHint() : nothing}
         ${this._renderTabLabelsSection()}
-        ${this._renderPaymentChipsSection()}
         ${this._renderCarsRosterSection()}
+      </div>
+    `;
+  }
+
+  private _renderEntitiesSection(): TemplateResult {
+    const entityIds = this._config.entities?.length ? this._config.entities : [""];
+    return html`
+      <div class="editor-section">
+        <div class="section-header">${this._et("section_price_entities")}</div>
+        ${entityIds.map((entityId, idx) => {
+          const inputId = `entity-${idx}`;
+          return html`
+            <div class="entity-row">
+              <ha-textfield
+                id=${inputId}
+                class="entity-input"
+                label=${this._et("entity_id")}
+                placeholder="sensor.bft_osdorfer_landstr_5_diesel"
+                .value=${entityId}
+                autocomplete="off"
+                @change=${(e: Event) => this._onEntityChange(idx, e)}
+                @keydown=${this._stop}
+                @keyup=${this._stop}
+                @keypress=${this._stop}
+              ></ha-textfield>
+              <button
+                class="entity-delete-btn"
+                type="button"
+                aria-label=${this._et("entity_delete")}
+                title=${this._et("entity_delete")}
+                @click=${(e: Event) => this._onDeleteEntity(e, idx)}
+              >
+                <ha-icon icon="mdi:delete-outline" aria-hidden="true"></ha-icon>
+              </button>
+            </div>
+          `;
+        })}
+        <button class="entity-add-btn" type="button" @click=${this._onAddEntity}>
+          ${this._et("add_entity")}
+        </button>
+        <div class="editor-hint">${this._et("entities_hint")}</div>
       </div>
     `;
   }
@@ -414,8 +462,7 @@ export class TankstellenAustriaCardEditor
       <div class="editor-section">
         <div class="section-header">${this._et("section_tab_labels")}</div>
         ${resolvable.map(({ eid, state }) => {
-          const ft = state.attributes?.fuel_type ?? "";
-          let defaultLabel = getFuelName(ft, this._ctx());
+          let defaultLabel = this._entityLabel(eid);
           if (state.attributes?.dynamic_mode === true) {
             const trackerLabel = state.attributes.dynamic_tracker_label as
               | string

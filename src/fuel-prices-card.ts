@@ -18,6 +18,7 @@ import { classMap } from "lit/directives/class-map.js";
 
 import type {
   CarConfig,
+  FuelType,
   HomeAssistant,
   LovelaceCardEditor,
   OpeningHours,
@@ -26,13 +27,8 @@ import type {
   TankstellenAustriaCardConfig,
   TankstellenEntity,
 } from "./types";
-import {
-  CARD_VERSION,
-  DYNAMIC_MANUAL_COOLDOWN_MS,
-  HISTORY_REFRESH_MS,
-} from "./const";
+import { DYNAMIC_MANUAL_COOLDOWN_MS, HISTORY_REFRESH_MS } from "./const";
 import { normaliseConfig } from "./utils/config";
-import { findTankstellenEntities } from "./utils/entities";
 import {
   hasPaymentMethods,
   matchesPaymentFilter,
@@ -59,11 +55,6 @@ import {
   type BestRefuelResult,
 } from "./analytics/best-refuel";
 import { cardStyles } from "./styles";
-import {
-  checkCardVersionWS,
-  renderVersionBanner,
-  reloadAfterCacheWipe,
-} from "./shared-render";
 import {
   detectNavPlatform,
   E_CONTROL_HOMEPAGE,
@@ -106,23 +97,63 @@ interface WindowWithCustomCards extends Window {
   (window as unknown as WindowWithCustomCards).customCards || [];
 (window as unknown as WindowWithCustomCards).customCards.push({
   type: "tankstellen-austria-card",
-  name: "Tankstellen Austria",
+  name: "Fuel prices Card",
   description:
-    "Austrian fuel prices from E-Control with sparklines and best-refuel analytics.",
+    "Fuel price sensors with sparklines, best-refuel analytics, and car cost calculations.",
   preview: true,
   documentationURL: "https://github.com/rolandzeiner/tankstellen-austria",
-  getEntitySuggestion: (hass: HomeAssistant, entityId: string) => {
-    if (!entityId.startsWith("sensor.")) return null;
-    if (hass?.entities?.[entityId]?.platform !== "tankstellen_austria")
-      return null;
-    return {
-      config: {
-        type: "custom:tankstellen-austria-card",
-        entities: [entityId],
-      },
-    };
-  },
 });
+
+type FuelEntityAttributes = Record<string, unknown> & {
+  friendly_name?: string;
+  station_name?: string;
+  device?: string;
+  brand?: string;
+  street?: string;
+  house_number?: string | number;
+  postcode?: string | number;
+  city?: string;
+  fuel_type?: string;
+  fuel_type_name?: string;
+};
+
+function normaliseFuelType(raw: string | undefined): FuelType | string {
+  const value = raw?.trim().toLowerCase();
+  switch (value) {
+    case "diesel":
+    case "d":
+    case "die":
+      return "DIE";
+    case "super":
+    case "super95":
+    case "e5":
+    case "95":
+    case "sup":
+      return "SUP";
+    case "cng":
+    case "gas":
+      return "GAS";
+    default:
+      return raw ?? "";
+  }
+}
+
+function firstString(...values: Array<unknown>): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function formatLocation(attrs: FuelEntityAttributes): string | undefined {
+  const location = [attrs.street, attrs.house_number, attrs.postcode, attrs.city]
+    .filter((part): part is string | number => part != null && part !== "")
+    .map((part) => String(part).trim())
+    .filter((part) => part.length > 0);
+  return location.length ? location.join(" ") : undefined;
+}
 
 @customElement("tankstellen-austria-card")
 export class TankstellenAustriaCard extends LitElement {
@@ -133,9 +164,8 @@ export class TankstellenAustriaCard extends LitElement {
   }
 
   public static getStubConfig(hass: HomeAssistant | undefined): Record<string, unknown> {
-    const entities = findTankstellenEntities(hass);
     return {
-      entities: entities.length ? [entities[0]] : [],
+      entities: [],
       max_stations: 5,
       show_index: true,
       show_map_links: true,
@@ -260,8 +290,7 @@ export class TankstellenAustriaCard extends LitElement {
   }
 
   private _trackedEntityIds(): string[] {
-    if (this._config.entities?.length) return this._config.entities;
-    return findTankstellenEntities(this.hass);
+    return this._config.entities ?? [];
   }
 
   private _resolveEntities(): TankstellenEntity[] {
@@ -329,7 +358,6 @@ export class TankstellenAustriaCard extends LitElement {
       this._historyInterval = window.setInterval(() => {
         void this._fetchAllHistory();
       }, HISTORY_REFRESH_MS);
-      void this._checkCardVersion();
     }
     // Re-wire sparkline hover after every render (cheap; entity may have
     // changed with a tab click).
@@ -354,12 +382,7 @@ export class TankstellenAustriaCard extends LitElement {
   }
 
   private async _checkCardVersion(): Promise<void> {
-    const mismatch = await checkCardVersionWS(
-      this.hass,
-      "tankstellen_austria/card_version",
-      CARD_VERSION,
-    );
-    if (mismatch) this._versionMismatch = mismatch;
+    return;
   }
 
   private _reattachSparklineHover(): void {
@@ -399,7 +422,6 @@ export class TankstellenAustriaCard extends LitElement {
           <div class="empty" role="status" aria-live="polite">
             ${this._t("loading")}
           </div>
-          ${this._renderFooter(undefined)}
         </ha-card>
       `;
     }
@@ -411,107 +433,45 @@ export class TankstellenAustriaCard extends LitElement {
     if (!entities.length) {
       return html`
         <ha-card>
-          ${this._renderVersionBanner()}
           <div class="empty">${this._t("no_data")}</div>
-          ${this._renderFooter(undefined)}
         </ha-card>
       `;
     }
 
     // entities.length > 0 was just checked above, so entities[0] is defined.
     const active = entities[activeTab] ?? entities[0]!;
-    const attribution = active.attributes.attribution;
 
     return html`
       <ha-card>
         ${this._renderTabs(entities, activeTab)}
         <div class="wrap">
-          ${this._renderVersionBanner()}
           ${this._historyError
             ? html`<ha-alert alert-type="warning" role="alert">
                 ${this._t("history_fetch_error")}
               </ha-alert>`
             : nothing}
-          <section
-            class="station-section"
-            style="--tankst-accent: var(--primary-color);"
-          >
+          <section class="station-section" style="--tankst-accent: var(--primary-color);">
             ${this._renderHeader(active)}
             ${this._renderHero(active)}
             ${this._renderSparklineBlock(active)}
             ${this._renderCars(active)}
           </section>
-          ${this._renderStationList(active, activeTab)}
         </div>
-        ${this._renderFooter(attribution)}
       </ha-card>
     `;
   }
 
-  // E-Control attribution + brand-link footer. Mirrors the Ladestellen
-  // Austria card. When logo_adapt_to_theme is on, the SVG renders as a
-  // theme-following silhouette; otherwise it stays in its native colour.
-  // Suppressed entirely when hide_attribution is true.
   private _renderFooter(
-    attribution: string | undefined,
+    _attribution: string | undefined,
   ): TemplateResult | typeof nothing {
-    if (this._config?.hide_attribution === true) return nothing;
-    const adaptive = this._config?.logo_adapt_to_theme === true;
-    const darkMode = Boolean(
-      (this.hass?.themes as { darkMode?: boolean } | undefined)?.darkMode,
-    );
-    const logoClasses = adaptive
-      ? `brand-logo adaptive ${darkMode ? "adaptive-dark" : "adaptive-light"}`
-      : "brand-logo";
-    const text =
-      attribution && attribution.includes("E-Control")
-        ? attribution
-        : ATTRIBUTION_REQUIRED;
-    return html`
-      <div class="footer">
-        <a
-          class="brand-link"
-          href=${safeHttpsUri(E_CONTROL_HOMEPAGE)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="E-Control"
-          @click=${(ev: Event) => ev.stopPropagation()}
-        >
-          <img
-            class=${logoClasses}
-            src=${E_CONTROL_LOGO_URL}
-            alt="E-Control"
-          />
-        </a>
-        <span class="attribution-text">${text}</span>
-      </div>
-    `;
+    return nothing;
   }
 
   private _renderVersionBanner(): TemplateResult | typeof nothing {
-    // If the user already clicked reload in this session and the version
-    // we just saw from the backend is still ahead of CARD_VERSION, the
-    // reload didn't pick up the new bundle (likely a stuck SW/CDN cache).
-    // Switch the banner to a stuck-state message so the user isn't
-    // trapped in a reload → banner → reload loop.
-    const stuck =
-      this._versionMismatch !== null &&
-      typeof sessionStorage !== "undefined" &&
-      sessionStorage.getItem(
-        `tsa-reload-attempted-${this._versionMismatch}`,
-      ) === "1";
-    return renderVersionBanner({
-      mismatchVersion: this._versionMismatch,
-      stuck,
-      t: (key, repl) => this._t(key, repl),
-      onReload: this._onVersionReload,
-      onDismiss: this._onDismissVersionBanner,
-    });
+    return nothing;
   }
 
-  private _onDismissVersionBanner = (): void => {
-    this._versionMismatch = null;
-  };
+  private _onDismissVersionBanner = (): void => {};
 
   private _renderTabs(
     entities: TankstellenEntity[],
@@ -523,17 +483,10 @@ export class TankstellenAustriaCard extends LitElement {
       <div class="tabs" role="tablist">
         ${entities.map((e, i) => {
           const custom = customLabels[e.entity_id];
-          let label: string;
-          if (typeof custom === "string" && custom.trim().length > 0) {
-            label = custom;
-          } else {
-            const ft = e.attributes.fuel_type ?? "";
-            label = getFuelName(ft, this._ctx());
-            if (e.attributes.dynamic_mode === true) {
-              const trackerLabel = e.attributes.dynamic_tracker_label;
-              if (trackerLabel) label += ` · ${trackerLabel}`;
-            }
-          }
+          const label =
+            typeof custom === "string" && custom.trim().length > 0
+              ? custom
+              : this._entityLabel(e);
           const selected = i === activeTab;
           return html`
             <button
@@ -554,19 +507,37 @@ export class TankstellenAustriaCard extends LitElement {
     `;
   }
 
+  private _entityLabel(entity: TankstellenEntity): string {
+    const attrs = entity.attributes as FuelEntityAttributes;
+    return firstString(attrs.station_name, attrs.device, attrs.friendly_name, entity.entity_id) ??
+      entity.entity_id;
+  }
+
+  private _entitySubtitle(entity: TankstellenEntity): string | undefined {
+    const attrs = entity.attributes as FuelEntityAttributes;
+    const fuelType = normaliseFuelType(attrs.fuel_type);
+    const fuelName =
+      typeof attrs.fuel_type_name === "string" && attrs.fuel_type_name.trim()
+        ? attrs.fuel_type_name.trim()
+        : getFuelName(fuelType, this._ctx());
+    const location = formatLocation(attrs);
+    const parts = [fuelName, location].filter(
+      (part): part is string => typeof part === "string" && part.length > 0,
+    );
+    return parts.length ? parts.join(" · ") : undefined;
+  }
+
+  private _entityPrice(entity: TankstellenEntity): number | null {
+    const price = parseFloat(entity.state);
+    return Number.isFinite(price) ? price : null;
+  }
+
   private _renderHeader(
     active: TankstellenEntity,
   ): TemplateResult | typeof nothing {
     if (this._config?.hide_header === true) return nothing;
-    const fuelType = active.attributes.fuel_type ?? "";
-    const fuelTypeName =
-      active.attributes.fuel_type_name || getFuelName(fuelType, this._ctx());
-    const isDynamic = active.attributes.dynamic_mode === true;
-
-    let subtitle: string | null = null;
-    if (isDynamic) {
-      subtitle = active.attributes.dynamic_tracker_label ?? null;
-    }
+    const title = this._entityLabel(active);
+    const subtitle = this._entitySubtitle(active);
 
     return html`
       <header class="header">
@@ -574,19 +545,9 @@ export class TankstellenAustriaCard extends LitElement {
           <ha-icon icon="mdi:gas-station"></ha-icon>
         </div>
         <div class="header-text">
-          <h2 class="title">${fuelTypeName}</h2>
-          ${subtitle
-            ? html`<p class="subtitle">${subtitle}</p>`
-            : nothing}
+          <h2 class="title">${title}</h2>
+          ${subtitle ? html`<p class="subtitle">${subtitle}</p>` : nothing}
         </div>
-        ${isDynamic
-          ? html`
-              <div class="header-actions">
-                ${this._renderRefreshButton()}
-                ${this._renderDynamicChips(active)}
-              </div>
-            `
-          : nothing}
       </header>
     `;
   }
@@ -645,35 +606,16 @@ export class TankstellenAustriaCard extends LitElement {
   private _renderHero(
     active: TankstellenEntity,
   ): TemplateResult | typeof nothing {
-    const stations: Station[] = active.attributes.stations ?? [];
-    if (!stations.length) return nothing;
-
-    const isDynamic = active.attributes.dynamic_mode === true;
-    const cheapest = stations[0]?.price;
-    const avgPrice = active.attributes.average_price;
-
-    // Dynamic mode: no hero metric (last-updated + no_new_data chips
-    // live next to the refresh button in the header).
-    if (isDynamic) return nothing;
-
-    // User-suppressed hero (hide_header_price toggle).
+    const price = this._entityPrice(active);
+    if (price == null) return nothing;
     if (this._config.hide_header_price === true) return nothing;
-
-    // Static-mode hero: stacked metric (cheapest large, "/ avg" small,
-    // UPPERCASE label below).
-    if (cheapest == null) return nothing;
     return html`
       <div class="hero">
         <div class="metric">
           <div class="metric-value">
-            <span class="metric-num">${formatPrice(cheapest)}</span>
-            ${avgPrice != null
-              ? html`<span class="metric-of"
-                  >/ ${formatPrice(avgPrice)} ${this._t("average")}</span
-                >`
-              : nothing}
+            <span class="metric-num">${formatPrice(price)}</span>
           </div>
-          <div class="metric-label">${this._t("cheapest")}</div>
+          <div class="metric-label">${this._t("price")}</div>
         </div>
       </div>
     `;
@@ -682,8 +624,6 @@ export class TankstellenAustriaCard extends LitElement {
   private _renderSparklineBlock(
     active: TankstellenEntity,
   ): TemplateResult | typeof nothing {
-    const isDynamic = active.attributes.dynamic_mode === true;
-    if (isDynamic) return nothing;
     if (this._config.show_history === false) return nothing;
     return this._renderSparkline(active);
   }
@@ -815,40 +755,30 @@ export class TankstellenAustriaCard extends LitElement {
   }
 
   private _renderCars(active: TankstellenEntity): TemplateResult | typeof nothing {
-    const stations: Station[] = active.attributes.stations ?? [];
-    if (!stations.length) return nothing;
-
     const showCars = this._config.show_cars === true;
     const showCarFillup = this._config.show_car_fillup !== false;
     const showCarConsumption = this._config.show_car_consumption !== false;
     if (!showCars || (!showCarFillup && !showCarConsumption)) return nothing;
 
-    const fuelType = active.attributes.fuel_type ?? "";
-    const paymentFilter = this._config.payment_filter ?? [];
-    const highlightMode = this._config.payment_highlight_mode === true;
+    const fuelType = normaliseFuelType(
+      (active.attributes as FuelEntityAttributes).fuel_type,
+    );
+    const price = this._entityPrice(active);
+    if (price == null) return nothing;
 
     // Cars must match the *active* fuel type. Backed by the full config list.
     const rawCars: CarConfig[] = (this._config.cars ?? []).filter(
-      (c) => c.fuel_type === fuelType && c.tank_size > 0 && c.name,
+      (c) => normaliseFuelType(c.fuel_type) === fuelType && c.tank_size > 0 && c.name,
     );
     const cars = showCarFillup
       ? rawCars
       : rawCars.filter((c) => Number(c.consumption) > 0);
     if (!cars.length) return nothing;
 
-    // In filter mode use cheapest visible station (post-filter). In
-    // highlight mode all stations are visible, so use overall cheapest.
-    const filteredStations = highlightMode
-      ? stations
-      : stations.filter((s) => matchesPaymentFilter(s, paymentFilter));
-    const effectiveCheapest = highlightMode
-      ? stations[0]?.price
-      : filteredStations[0]?.price;
-
     return html`
       <div class="cars-fillup">
         ${cars.map((car) =>
-          this._renderCarRow(car, effectiveCheapest, showCarFillup, showCarConsumption),
+          this._renderCarRow(car, price, showCarFillup, showCarConsumption),
         )}
       </div>
     `;
@@ -1380,22 +1310,7 @@ export class TankstellenAustriaCard extends LitElement {
     }
   }
 
-  private _onVersionReload = async (): Promise<void> => {
-    // Flag this target version as "user tried reload" before the page
-    // unloads, so on re-render the banner flips to the stuck-state
-    // variant instead of a second reload button.
-    if (this._versionMismatch) {
-      try {
-        sessionStorage.setItem(
-          `tsa-reload-attempted-${this._versionMismatch}`,
-          "1",
-        );
-      } catch {
-        // sessionStorage can be disabled in private browsing — fall through.
-      }
-    }
-    await reloadAfterCacheWipe();
-  };
+  private _onVersionReload = async (): Promise<void> => {};
 
   static override styles: CSSResultGroup = cardStyles;
 }
