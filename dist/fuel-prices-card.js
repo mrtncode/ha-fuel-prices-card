@@ -265,12 +265,12 @@ var E = globalThis, D = (e) => e, O = E.trustedTypes, ee = O ? O.createPolicy("l
 	_$litType$: e,
 	strings: t,
 	values: n
-}), I = de(1), L = de(2), R = Symbol.for("lit-noChange"), z = Symbol.for("lit-nothing"), fe = /* @__PURE__ */ new WeakMap(), B = j.createTreeWalker(j, 129);
-function pe(e, t) {
+}), I = de(1), fe = de(2), L = Symbol.for("lit-noChange"), R = Symbol.for("lit-nothing"), pe = /* @__PURE__ */ new WeakMap(), z = j.createTreeWalker(j, 129);
+function me(e, t) {
 	if (!re(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
 	return ee === void 0 ? t : ee.createHTML(t);
 }
-var me = (e, t) => {
+var he = (e, t) => {
 	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = P;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
@@ -278,17 +278,17 @@ var me = (e, t) => {
 		let d = o === F && e[t + 1].startsWith("/>") ? " " : "";
 		a += o === P ? n + ne : l >= 0 ? (r.push(s), n.slice(0, l) + k + n.slice(l) + A + d) : n + A + (l === -2 ? t : d);
 	}
-	return [pe(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, he = class e {
+	return [me(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, ge = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = me(t, n);
-		if (this.el = e.createElement(l, r), B.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = he(t, n);
+		if (this.el = e.createElement(l, r), z.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = B.nextNode()) !== null && c.length < s;) {
+		for (; (i = z.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
 				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(k)) {
 					let t = u[o++], n = i.getAttribute(e).split(A), r = /([.?@])?(.*)/.exec(t);
@@ -297,7 +297,7 @@ var me = (e, t) => {
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? ye : r[1] === "?" ? be : r[1] === "@" ? xe : ve
+						ctor: r[1] === "." ? be : r[1] === "?" ? xe : r[1] === "@" ? Se : ye
 					}), i.removeAttribute(e);
 				} else e.startsWith(A) && (c.push({
 					type: 6,
@@ -307,7 +307,7 @@ var me = (e, t) => {
 					let e = i.textContent.split(A), t = e.length - 1;
 					if (t > 0) {
 						i.textContent = O ? O.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], M()), B.nextNode(), c.push({
+						for (let n = 0; n < t; n++) i.append(e[n], M()), z.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
@@ -333,12 +333,12 @@ var me = (e, t) => {
 		return n.innerHTML = e, n;
 	}
 };
-function V(e, t, n = e, r) {
-	if (t === R) return t;
+function B(e, t, n = e, r) {
+	if (t === L) return t;
 	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = N(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = V(e, i._$AS(e, t.values), i, r)), t;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = B(e, i._$AS(e, t.values), i, r)), t;
 }
-var ge = class {
+var _e = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -350,27 +350,27 @@ var ge = class {
 	}
 	u(e) {
 		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? j).importNode(t, !0);
-		B.currentNode = r;
-		let i = B.nextNode(), a = 0, o = 0, s = n[0];
+		z.currentNode = r;
+		let i = z.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new _e(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Se(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new ve(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Ce(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== s?.index && (i = B.nextNode(), a++);
+			a !== s?.index && (i = z.nextNode(), a++);
 		}
-		return B.currentNode = j, r;
+		return z.currentNode = j, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, _e = class e {
+}, ve = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = z, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
+		this.type = 2, this._$AH = R, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -383,7 +383,7 @@ var ge = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = V(this, e, t), N(e) ? e === z || e == null || e === "" ? (this._$AH !== z && this._$AR(), this._$AH = z) : e !== this._$AH && e !== R && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? ie(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = B(this, e, t), N(e) ? e === R || e == null || e === "" ? (this._$AH !== R && this._$AR(), this._$AH = R) : e !== this._$AH && e !== L && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? ie(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -392,19 +392,19 @@ var ge = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== z && N(this._$AH) ? this._$AA.nextSibling.data = e : this.T(j.createTextNode(e)), this._$AH = e;
+		this._$AH !== R && N(this._$AH) ? this._$AA.nextSibling.data = e : this.T(j.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = he.createElement(pe(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = ge.createElement(me(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new ge(r, this), n = e.u(this.options);
+			let e = new _e(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = fe.get(e.strings);
-		return t === void 0 && fe.set(e.strings, t = new he(e)), t;
+		let t = pe.get(e.strings);
+		return t === void 0 && pe.set(e.strings, t = new ge(e)), t;
 	}
 	k(t) {
 		re(this._$AH) || (this._$AH = [], this._$AR());
@@ -421,7 +421,7 @@ var ge = class {
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, ve = class {
+}, ye = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -429,47 +429,47 @@ var ge = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = z, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = z;
+		this.type = 1, this._$AH = R, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = R;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = V(this, e, t, 0), a = !N(e) || e !== this._$AH && e !== R, a && (this._$AH = e);
+		if (i === void 0) e = B(this, e, t, 0), a = !N(e) || e !== this._$AH && e !== L, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = V(this, r[n + o], t, o), s === R && (s = this._$AH[o]), a ||= !N(s) || s !== this._$AH[o], s === z ? e = z : e !== z && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = B(this, r[n + o], t, o), s === L && (s = this._$AH[o]), a ||= !N(s) || s !== this._$AH[o], s === R ? e = R : e !== R && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === z ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === R ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, ye = class extends ve {
+}, be = class extends ye {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === z ? void 0 : e;
+		this.element[this.name] = e === R ? void 0 : e;
 	}
-}, be = class extends ve {
+}, xe = class extends ye {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== z);
+		this.element.toggleAttribute(this.name, !!e && e !== R);
 	}
-}, xe = class extends ve {
+}, Se = class extends ye {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = V(this, e, t, 0) ?? z) === R) return;
-		let n = this._$AH, r = e === z && n !== z || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== z && (n === z || r);
+		if ((e = B(this, e, t, 0) ?? R) === L) return;
+		let n = this._$AH, r = e === R && n !== R || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== R && (n === R || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, Se = class {
+}, Ce = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -477,18 +477,18 @@ var ge = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		V(this, e);
+		B(this, e);
 	}
-}, Ce = E.litHtmlPolyfillSupport;
-Ce?.(he, _e), (E.litHtmlVersions ??= []).push("3.3.3");
-var we = (e, t, n) => {
+}, we = E.litHtmlPolyfillSupport;
+we?.(ge, ve), (E.litHtmlVersions ??= []).push("3.3.3");
+var Te = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new _e(t.insertBefore(M(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new ve(t.insertBefore(M(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, Te = globalThis, H = class extends T {
+}, Ee = globalThis, V = class extends T {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -498,7 +498,7 @@ var we = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = we(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Te(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -507,25 +507,25 @@ var we = (e, t, n) => {
 		super.disconnectedCallback(), this._$Do?.setConnected(!1);
 	}
 	render() {
-		return R;
+		return L;
 	}
 };
-H._$litElement$ = !0, H.finalized = !0, Te.litElementHydrateSupport?.({ LitElement: H });
-var Ee = Te.litElementPolyfillSupport;
-Ee?.({ LitElement: H }), (Te.litElementVersions ??= []).push("4.2.2");
+V._$litElement$ = !0, V.finalized = !0, Ee.litElementHydrateSupport?.({ LitElement: V });
+var De = Ee.litElementPolyfillSupport;
+De?.({ LitElement: V }), (Ee.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region node_modules/@lit/reactive-element/decorators/custom-element.js
-var De = (e) => (t, n) => {
+var Oe = (e) => (t, n) => {
 	n === void 0 ? customElements.define(e, t) : n.addInitializer(() => {
 		customElements.define(e, t);
 	});
-}, Oe = {
+}, ke = {
 	attribute: !0,
 	type: String,
 	converter: S,
 	reflect: !1,
 	hasChanged: C
-}, ke = (e = Oe, t, n) => {
+}, Ae = (e = ke, t, n) => {
 	let { kind: r, metadata: i } = n, a = globalThis.litPropertyMetadata.get(i);
 	if (a === void 0 && globalThis.litPropertyMetadata.set(i, a = /* @__PURE__ */ new Map()), r === "setter" && ((e = Object.create(e)).wrapped = !0), a.set(n.name, e), r === "accessor") {
 		let { name: r } = n;
@@ -548,16 +548,16 @@ var De = (e) => (t, n) => {
 	}
 	throw Error("Unsupported decorator location: " + r);
 };
-function Ae(e) {
-	return (t, n) => typeof n == "object" ? ke(e, t, n) : ((e, t, n) => {
+function je(e) {
+	return (t, n) => typeof n == "object" ? Ae(e, t, n) : ((e, t, n) => {
 		let r = t.hasOwnProperty(n);
 		return t.constructor.createProperty(n, e), r ? Object.getOwnPropertyDescriptor(t, n) : void 0;
 	})(e, t, n);
 }
 //#endregion
 //#region node_modules/@lit/reactive-element/decorators/state.js
-function U(e) {
-	return Ae({
+function H(e) {
+	return je({
 		...e,
 		state: !0,
 		attribute: !1
@@ -565,17 +565,17 @@ function U(e) {
 }
 //#endregion
 //#region node_modules/lit-html/directive.js
-var je = {
+var Me = {
 	ATTRIBUTE: 1,
 	CHILD: 2,
 	PROPERTY: 3,
 	BOOLEAN_ATTRIBUTE: 4,
 	EVENT: 5,
 	ELEMENT: 6
-}, Me = (e) => (...t) => ({
+}, Ne = (e) => (...t) => ({
 	_$litDirective$: e,
 	values: t
-}), Ne = class {
+}), Pe = class {
 	constructor(e) {}
 	get _$AU() {
 		return this._$AM._$AU;
@@ -589,9 +589,9 @@ var je = {
 	update(e, t) {
 		return this.render(...t);
 	}
-}, W = Me(class extends Ne {
+}, U = Ne(class extends Pe {
 	constructor(e) {
-		if (super(e), e.type !== je.ATTRIBUTE || e.name !== "class" || e.strings?.length > 2) throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.");
+		if (super(e), e.type !== Me.ATTRIBUTE || e.name !== "class" || e.strings?.length > 2) throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.");
 	}
 	render(e) {
 		return " " + Object.keys(e).filter((t) => e[t]).join(" ") + " ";
@@ -608,9 +608,9 @@ var je = {
 			let r = !!t[e];
 			r === this.st.has(e) || this.nt?.has(e) || (r ? (n.add(e), this.st.add(e)) : (n.remove(e), this.st.delete(e)));
 		}
-		return R;
+		return L;
 	}
-}), Pe = 120 * 1e3, Fe = 1800 * 1e3, Ie = [
+}), Fe = 120 * 1e3, Ie = 1800 * 1e3, Le = [
 	"mdi:car",
 	"mdi:car-sports",
 	"mdi:car-hatchback",
@@ -625,14 +625,14 @@ var je = {
 	"mdi:bus",
 	"mdi:truck",
 	"mdi:rv-truck"
-], Le = [
+], Re = [
 	"DIE",
 	"SUP",
 	"GAS"
 ];
-function Re(e) {
+function ze(e) {
 	if (!e || typeof e != "object") return null;
-	let t = e, n = typeof t.name == "string" ? t.name.slice(0, 50) : "", r = Le.includes(t.fuel_type) ? t.fuel_type : "DIE", i = parseInt(String(t.tank_size), 10), a = Number.isFinite(i) && i >= 1 ? Math.min(200, i) : 50, o;
+	let t = e, n = typeof t.name == "string" ? t.name.slice(0, 50) : "", r = Re.includes(t.fuel_type) ? t.fuel_type : "DIE", i = parseInt(String(t.tank_size), 10), a = Number.isFinite(i) && i >= 1 ? Math.min(200, i) : 50, o;
 	if (t.consumption != null) {
 		let e = parseFloat(String(t.consumption));
 		Number.isFinite(e) && e >= 0 && (o = Math.min(30, e));
@@ -645,40 +645,40 @@ function Re(e) {
 	};
 	return o != null && (s.consumption = o), s;
 }
-function ze(e) {
+function Be(e) {
 	if (!e) throw Error("tankstellen-austria-card: config missing");
 	let t = { ...e };
 	if (typeof t.entities == "string" && (t.entities = [t.entities]), Array.isArray(t.entities) ? t.entities = t.entities.filter((e) => typeof e == "string" && e.includes(".")) : t.entities != null && (console.warn("[Tankstellen Austria] config.entities must be an array of entity IDs — ignoring", t.entities), delete t.entities), t.max_stations != null) {
 		let e = parseInt(String(t.max_stations), 10);
 		t.max_stations = Number.isFinite(e) ? Math.max(0, Math.min(5, e)) : 5;
 	}
-	return Array.isArray(t.payment_filter) ? t.payment_filter = t.payment_filter.filter((e) => typeof e == "string" && e.length > 0) : t.payment_filter != null && delete t.payment_filter, Array.isArray(t.cars) ? t.cars = t.cars.map((e) => Re(e)).filter((e) => e !== null) : t.cars != null && delete t.cars, t;
+	return Array.isArray(t.payment_filter) ? t.payment_filter = t.payment_filter.filter((e) => typeof e == "string" && e.length > 0) : t.payment_filter != null && delete t.payment_filter, Array.isArray(t.cars) ? t.cars = t.cars.map((e) => ze(e)).filter((e) => e !== null) : t.cars != null && delete t.cars, t;
 }
 //#endregion
 //#region src/utils/payment.ts
-function Be(e) {
+function Ve(e) {
 	return e ? !!(e.cash || e.debit_card || e.credit_card || e.others && e.others.length > 0) : !1;
 }
-function Ve(e, t, n) {
+function He(e, t, n) {
 	return t === "cash" ? e.cash ? n?.cash ?? "cash" : null : t === "debit_card" ? e.debit_card ? n?.debit_card ?? "debit_card" : null : t === "credit_card" ? e.credit_card ? n?.credit_card ?? "credit_card" : null : (e.others ?? []).find((e) => e.toLowerCase() === t.toLowerCase()) ?? null;
 }
-function He(e, t) {
+function Ue(e, t) {
 	if (!t || !t.length) return !0;
 	let n = e.payment_methods ?? {};
-	return t.some((e) => Ve(n, e) !== null);
+	return t.some((e) => He(n, e) !== null);
 }
-function Ue(e, t, n) {
+function We(e, t, n) {
 	if (!t || !t.length) return [];
 	let r = e.payment_methods ?? {}, i = [];
 	for (let e of t) {
-		let t = Ve(r, e, n);
+		let t = He(r, e, n);
 		t !== null && i.push(t);
 	}
 	return i;
 }
 //#endregion
 //#region src/utils/station.ts
-function We(e, t = /* @__PURE__ */ new Date()) {
+function Ge(e, t = /* @__PURE__ */ new Date()) {
 	if (e.open === !1) return !1;
 	let n = e.opening_hours ?? [];
 	if (!n.length) return !1;
@@ -695,16 +695,16 @@ function We(e, t = /* @__PURE__ */ new Date()) {
 }
 //#endregion
 //#region src/utils/price.ts
-function Ge(e) {
+function Ke(e) {
 	return e == null || !Number.isFinite(Number(e)) ? "–" : `€ ${Number(e).toFixed(3).replace(".", ",")}`;
 }
-function G(e) {
+function W(e) {
 	return e == null || !Number.isFinite(Number(e)) ? "–" : Number(e).toFixed(3).replace(".", ",");
 }
-function Ke(e) {
+function qe(e) {
 	return e == null || !Number.isFinite(e) || e < 0 ? "" : e < 1e3 ? `${Math.round(e)} m` : `${(e / 1e3).toFixed(1).replace(".", ",")} km`;
 }
-function qe(e, t, n = "google") {
+function Je(e, t, n = "google") {
 	if (!e) return t ? `https://www.google.com/search?q=${encodeURIComponent(t)}` : null;
 	if (/\d/.test(e.address ?? "")) {
 		let t = `${e.postalCode ?? ""} ${e.city ?? ""} ${e.address ?? ""}`.trim(), r = encodeURIComponent(t);
@@ -720,19 +720,19 @@ function qe(e, t, n = "google") {
 }
 //#endregion
 //#region src/localize/languages/en.json
-var Je = /* @__PURE__ */ t({
-	card: () => Xe,
-	common: () => Ye,
-	default: () => et,
-	editor: () => $e,
-	fuel_types: () => Ze,
-	weekdays: () => Qe
-}), Ye = {
+var Ye = /* @__PURE__ */ t({
+	card: () => Ze,
+	common: () => Xe,
+	default: () => tt,
+	editor: () => et,
+	fuel_types: () => Qe,
+	weekdays: () => $e
+}), Xe = {
 	version: "Version",
 	invalid_configuration: "Invalid configuration",
 	loading: "Loading…",
 	no_data: "No data available"
-}, Xe = {
+}, Ze = {
 	cheapest: "Cheapest price",
 	average: "Avg. price",
 	price: "Price",
@@ -784,11 +784,11 @@ var Je = /* @__PURE__ */ t({
 	sparkline_aria_summary: "Price history last 7 days: minimum {min}, maximum {max}, median {median}",
 	sparkline_aria_simple: "Price history last 7 days: minimum {min}, maximum {max}",
 	history_fetch_error: "Couldn't load price history"
-}, Ze = {
+}, Qe = {
 	DIE: "Diesel",
 	SUP: "Super 95",
 	GAS: "CNG"
-}, Qe = [
+}, $e = [
 	"Sunday",
 	"Monday",
 	"Tuesday",
@@ -796,7 +796,7 @@ var Je = /* @__PURE__ */ t({
 	"Thursday",
 	"Friday",
 	"Saturday"
-], $e = {
+], et = {
 	entities: "Price entities",
 	section_price_entities: "Price entities",
 	entities_hint: "Enter the sensor entity IDs for your fuel price sensors.",
@@ -856,25 +856,25 @@ var Je = /* @__PURE__ */ t({
 	logo_adapt_to_theme: "Adapt E-Control logo color to theme",
 	hide_header: "Hide header",
 	hide_attribution: "Hide attribution footer"
-}, et = {
-	common: Ye,
-	card: Xe,
-	fuel_types: Ze,
-	weekdays: Qe,
-	editor: $e
-}, tt = /* @__PURE__ */ t({
-	card: () => rt,
-	common: () => nt,
-	default: () => st,
-	editor: () => ot,
-	fuel_types: () => it,
-	weekdays: () => at
-}), nt = {
+}, tt = {
+	common: Xe,
+	card: Ze,
+	fuel_types: Qe,
+	weekdays: $e,
+	editor: et
+}, nt = /* @__PURE__ */ t({
+	card: () => it,
+	common: () => rt,
+	default: () => ct,
+	editor: () => st,
+	fuel_types: () => at,
+	weekdays: () => ot
+}), rt = {
 	version: "Version",
 	invalid_configuration: "Ungültige Konfiguration",
 	loading: "Lädt…",
 	no_data: "Keine Daten verfügbar"
-}, rt = {
+}, it = {
 	cheapest: "Günstigster Preis",
 	average: "Ø Preis",
 	price: "Preis",
@@ -926,11 +926,11 @@ var Je = /* @__PURE__ */ t({
 	sparkline_aria_summary: "Preisverlauf der letzten 7 Tage: Minimum {min}, Maximum {max}, Median {median}",
 	sparkline_aria_simple: "Preisverlauf der letzten 7 Tage: Minimum {min}, Maximum {max}",
 	history_fetch_error: "Preisverlauf konnte nicht geladen werden"
-}, it = {
+}, at = {
 	DIE: "Diesel",
 	SUP: "Super 95",
 	GAS: "CNG Erdgas"
-}, at = [
+}, ot = [
 	"Sonntag",
 	"Montag",
 	"Dienstag",
@@ -938,7 +938,7 @@ var Je = /* @__PURE__ */ t({
 	"Donnerstag",
 	"Freitag",
 	"Samstag"
-], ot = {
+], st = {
 	entities: "Preis-Entitäten",
 	section_price_entities: "Preis-Entitäten",
 	entities_hint: "Sensor-Entity-IDs für deine Kraftstoffpreise eingeben.",
@@ -998,54 +998,54 @@ var Je = /* @__PURE__ */ t({
 	logo_adapt_to_theme: "E-Control-Logo an Theme-Farbe anpassen",
 	hide_header: "Kopfzeile ausblenden",
 	hide_attribution: "Quellenangabe ausblenden"
-}, st = {
-	common: nt,
-	card: rt,
-	fuel_types: it,
-	weekdays: at,
-	editor: ot
-}, ct = Je, K = tt, lt = {
-	en: ct,
-	de: K
+}, ct = {
+	common: rt,
+	card: it,
+	fuel_types: at,
+	weekdays: ot,
+	editor: st
+}, lt = Ye, G = nt, ut = {
+	en: lt,
+	de: G
 };
-function q(e, t) {
+function K(e, t) {
 	return e.split(".").reduce((e, t) => {
 		if (e && typeof e == "object" && t in e) return e[t];
 	}, t);
 }
-function ut(e, t) {
-	let n = q(e, t);
+function dt(e, t) {
+	let n = K(e, t);
 	return typeof n == "string" ? n : void 0;
 }
-function dt(e) {
+function ft(e) {
 	return (e.configLanguage || e.hassLanguage || "de").replace("-", "_");
 }
-function ft(e, t, n) {
-	let r = ut(e, lt[dt(t)] ?? K);
-	if (r === void 0 && (r = ut(e, K)), r === void 0 && (r = e), n) for (let [e, t] of Object.entries(n)) r = r.replace(`{${e}}`, t);
+function pt(e, t, n) {
+	let r = dt(e, ut[ft(t)] ?? G);
+	if (r === void 0 && (r = dt(e, G)), r === void 0 && (r = e), n) for (let [e, t] of Object.entries(n)) r = r.replace(`{${e}}`, t);
 	return r;
 }
-function pt(e) {
-	let t = q("weekdays", lt[dt(e)] ?? K);
+function mt(e) {
+	let t = K("weekdays", ut[ft(e)] ?? G);
 	if (Array.isArray(t) && t.every((e) => typeof e == "string")) return t;
-	let n = q("weekdays", K);
+	let n = K("weekdays", G);
 	return Array.isArray(n) ? n : [];
 }
-function mt(e, t) {
-	let n = (q("fuel_types", lt[dt(t)] ?? K) ?? q("fuel_types", K))?.[e];
+function ht(e, t) {
+	let n = (K("fuel_types", ut[ft(t)] ?? G) ?? K("fuel_types", G))?.[e];
 	return typeof n == "string" ? n : e;
 }
 //#endregion
 //#region src/history.ts
-var ht = /* @__PURE__ */ new Map(), gt = /* @__PURE__ */ new Map();
-function _t(e) {
+var gt = /* @__PURE__ */ new Map(), _t = /* @__PURE__ */ new Map();
+function vt(e) {
 	if (typeof e.lu == "number") return Math.round(e.lu * 1e3);
 	let t = e.lu ?? e.last_updated ?? e.last_changed;
 	return t ? new Date(t).getTime() : 0;
 }
-async function vt(e, t, n = {}) {
+async function yt(e, t, n = {}) {
 	if (!e?.callWS) return [];
-	let r = gt.get(t);
+	let r = _t.get(t);
 	if (r) return r;
 	let i = n.days ?? 28, a = /* @__PURE__ */ new Date(), o = /* @__PURE__ */ new Date(a.getTime() - i * 24 * 60 * 60 * 1e3), s = (async () => {
 		try {
@@ -1057,24 +1057,24 @@ async function vt(e, t, n = {}) {
 				minimal_response: !0,
 				significant_changes_only: !0
 			}))?.[t] ?? []).map((e) => ({
-				time: _t(e),
+				time: vt(e),
 				value: parseFloat(String(e.s ?? e.state ?? ""))
 			})).filter((e) => Number.isFinite(e.value) && e.time > 0);
-			return ht.set(t, n), n;
+			return gt.set(t, n), n;
 		} catch (e) {
-			return console.warn("[Tankstellen Austria] history fetch failed for", t, "— sparkline and best-refuel will be empty:", e), ht.get(t) ?? [];
+			return console.warn("[Tankstellen Austria] history fetch failed for", t, "— sparkline and best-refuel will be empty:", e), gt.get(t) ?? [];
 		} finally {
-			gt.delete(t);
+			_t.delete(t);
 		}
 	})();
-	return gt.set(t, s), s;
+	return _t.set(t, s), s;
 }
-function yt(e) {
-	return ht.get(e) ?? [];
+function bt(e) {
+	return gt.get(e) ?? [];
 }
 //#endregion
 //#region src/utils/math.ts
-function bt(e) {
+function xt(e) {
 	let t = e.length;
 	if (t === 0) return "";
 	if (t === 1) return `M ${e[0].x.toFixed(2)} ${e[0].y.toFixed(2)}`;
@@ -1105,24 +1105,24 @@ function bt(e) {
 	}
 	return i;
 }
-function xt(e, t) {
-	return !e || !t || e.length < 2 || e.length !== t.length ? "" : `${bt(e)} ${bt([...t].reverse()).replace(/^M\s+([-\d.]+)\s+([-\d.]+)/, (e, t, n) => `L ${t} ${n}`)} Z`;
+function St(e, t) {
+	return !e || !t || e.length < 2 || e.length !== t.length ? "" : `${xt(e)} ${xt([...t].reverse()).replace(/^M\s+([-\d.]+)\s+([-\d.]+)/, (e, t, n) => `L ${t} ${n}`)} Z`;
 }
-function J(e, t, n) {
+function q(e, t, n) {
 	return Math.max(t, Math.min(n, e));
 }
-function Y(e, t) {
+function J(e, t) {
 	let n = e.filter((e) => Number.isFinite(e.value) && e.weight > 0);
 	if (n.length === 0) return NaN;
 	if (n.length === 1) return n[0].value;
-	let r = [...n].sort((e, t) => e.value - t.value), i = r.reduce((e, t) => e + t.weight, 0), a = J(t, 0, 1) * i, o = 0;
+	let r = [...n].sort((e, t) => e.value - t.value), i = r.reduce((e, t) => e + t.weight, 0), a = q(t, 0, 1) * i, o = 0;
 	for (let e of r) if (o += e.weight, o >= a) return e.value;
 	return r[r.length - 1].value;
 }
 //#endregion
 //#region src/sparkline.ts
-var X = 280, Z = 48, St = 4, Ct = 10080 * 60 * 1e3;
-function wt(e) {
+var Y = 280, X = 48, Ct = 4, wt = 10080 * 60 * 1e3;
+function Tt(e) {
 	if (!e?.hasEnoughData || e.hour == null) return null;
 	let t = /* @__PURE__ */ new Date(), n = new Date(t);
 	if (e.weekday != null) {
@@ -1136,14 +1136,14 @@ function wt(e) {
 		endMs: r + (((e.hour_end ?? (e.hour + 1) % 24) - e.hour + 24) % 24 || 1) * 36e5
 	};
 }
-function Tt(e) {
-	let t = Date.now() - Ct, n = e.filter((e) => e.time >= t), r = e.filter((e) => e.time < t), i = r.length ? r[r.length - 1] : null;
+function Et(e) {
+	let t = Date.now() - wt, n = e.filter((e) => e.time >= t), r = e.filter((e) => e.time < t), i = r.length ? r[r.length - 1] : null;
 	return i ? [{
 		time: t,
 		value: i.value
 	}, ...n] : n;
 }
-function Et(e) {
+function Dt(e) {
 	if (e.length < 2) return null;
 	let t = [...e].sort((e, t) => e - t), n = (t.length - 1) / 2, r = (t[Math.floor(n)] + t[Math.ceil(n)]) / 2, i = (e[e.length - 1] - r) * 100, a = Math.abs(i).toFixed(1);
 	return i <= -.05 ? {
@@ -1160,22 +1160,22 @@ function Et(e) {
 		cls: "median-delta-neutral"
 	};
 }
-function Dt(e, t) {
+function Ot(e, t) {
 	let n = [...e].sort((e, t) => e - t), r = (n.length - 1) / 2;
 	return t((n[Math.floor(r)] + n[Math.ceil(r)]) / 2);
 }
-function Ot(e) {
+function kt(e) {
 	let t = {
-		template: z,
+		template: R,
 		hoverPoints: [],
 		medianDelta: null,
-		viewBoxWidth: X,
-		viewBoxHeight: Z
+		viewBoxWidth: Y,
+		viewBoxHeight: X
 	};
 	try {
 		let n = e.points;
 		if (!n || n.length < 2) return t;
-		let r = Tt(n);
+		let r = Et(n);
 		if (r.length < 2) return t;
 		let i = r[r.length - 1];
 		i.time < Date.now() - 18e5 && (r = [...r, {
@@ -1187,10 +1187,10 @@ function Ot(e) {
 			let t = u.minByHour[e], n = u.maxByHour[e];
 			t != null && n != null && (c = Math.min(c, t), l = Math.max(l, n));
 		}
-		let d = l - c || .01, f = (e) => Z - St - (e - c) / d * (Z - 2 * St), p = r.map((e, t) => ({
-			x: t / (r.length - 1) * X,
+		let d = l - c || .01, f = (e) => X - Ct - (e - c) / d * (X - 2 * Ct), p = r.map((e, t) => ({
+			x: t / (r.length - 1) * Y,
 			y: f(e.value)
-		})), m = bt(p), h = m ? `${m} L ${X.toFixed(2)} ${Z.toFixed(2)} L 0 ${Z.toFixed(2)} Z` : "", g = z;
+		})), m = xt(p), h = m ? `${m} L ${Y.toFixed(2)} ${X.toFixed(2)} L 0 ${X.toFixed(2)} Z` : "", g = R;
 		if (u) {
 			let e = [], t = [];
 			for (let n = 0; n < r.length; n++) {
@@ -1204,8 +1204,8 @@ function Ot(e) {
 				}));
 			}
 			if (e.length >= 2) {
-				let n = xt(e, t);
-				n && (g = L`<path d=${n} fill="var(--primary-color)" fill-opacity="0.08" stroke="none"/>`);
+				let n = St(e, t);
+				n && (g = fe`<path d=${n} fill="var(--primary-color)" fill-opacity="0.08" stroke="none"/>`);
 			}
 		}
 		let _ = r[0].time, v = r[r.length - 1].time, y = (e) => {
@@ -1222,32 +1222,32 @@ function Ot(e) {
 			let e = new Date(_);
 			for (e.setHours(12, 0, 0, 0), e.getTime() < _ && e.setDate(e.getDate() + 1); e.getTime() <= v; e.setDate(e.getDate() + 1), e.setHours(12, 0, 0, 0)) {
 				let t = y(e.getTime());
-				t != null && b.push(L`
-          <line x1=${t.toFixed(1)} y1="0" x2=${t.toFixed(1)} y2=${Z}
+				t != null && b.push(fe`
+          <line x1=${t.toFixed(1)} y1="0" x2=${t.toFixed(1)} y2=${X}
                 stroke="var(--secondary-text-color)" stroke-width="0.5"
                 stroke-dasharray="2,3" opacity="0.55"/>
         `);
 			}
 		}
-		let x = e.showMedianLine ? Et(a) : null, S = e.showMedianLine ? L`<line x1="0" y1=${Dt(a, f).toFixed(1)}
-                  x2=${X} y2=${Dt(a, f).toFixed(1)}
+		let x = e.showMedianLine ? Dt(a) : null, S = e.showMedianLine ? fe`<line x1="0" y1=${Ot(a, f).toFixed(1)}
+                  x2=${Y} y2=${Ot(a, f).toFixed(1)}
                   stroke="var(--secondary-text-color)" stroke-width="0.5"
-                  stroke-dasharray="4,3" opacity="0.55"/>` : z, C = wt(e.analysis), w = null, T = null;
+                  stroke-dasharray="4,3" opacity="0.55"/>` : R, C = Tt(e.analysis), w = null, T = null;
 		if (C) {
 			let e = y(C.startMs), t = y(C.endMs);
-			w = e ?? (C.startMs <= _ ? 0 : null), T = t ?? (C.endMs >= v ? X : null);
+			w = e ?? (C.startMs <= _ ? 0 : null), T = t ?? (C.endMs >= v ? Y : null);
 		}
-		let E = w != null && T != null && T > w ? L`<rect x=${w.toFixed(1)} y="0"
-                  width=${(T - w).toFixed(1)} height=${Z}
+		let E = w != null && T != null && T > w ? fe`<rect x=${w.toFixed(1)} y="0"
+                  width=${(T - w).toFixed(1)} height=${X}
                   fill="var(--success-color,#4CAF50)" fill-opacity="0.10"
-                  stroke="none"/>` : z, D = r.map((e, t) => ({
+                  stroke="none"/>` : R, D = r.map((e, t) => ({
 			t: e.time,
 			v: e.value,
 			x: +p[t].x.toFixed(1),
 			y: +p[t].y.toFixed(1)
 		})), O = `spark-grad-${Math.random().toString(36).slice(2, 8)}`, ee = e.showMedianLine ? (() => {
-			let t = Et(a);
-			if (!t) return z;
+			let t = Dt(a);
+			if (!t) return R;
 			let n = {
 				median_delta_below: e.translations.median_delta_below,
 				median_delta_above: e.translations.median_delta_above,
@@ -1256,19 +1256,19 @@ function Ot(e) {
 			return I`
             <span class="median-delta ${t.cls}">${n}</span>
           `;
-		})() : z, k = [...a].sort((e, t) => e - t), A = (k.length - 1) / 2, te = k.length > 0 ? (k[Math.floor(A)] + k[Math.ceil(A)]) / 2 : 0, ne = (e.showMedianLine ? e.translations.sparkline_aria_summary : e.translations.sparkline_aria_simple).replace("{min}", G(o)).replace("{max}", G(s)).replace("{median}", G(te));
+		})() : R, k = [...a].sort((e, t) => e - t), A = (k.length - 1) / 2, te = k.length > 0 ? (k[Math.floor(A)] + k[Math.ceil(A)]) / 2 : 0, ne = (e.showMedianLine ? e.translations.sparkline_aria_summary : e.translations.sparkline_aria_simple).replace("{min}", W(o)).replace("{max}", W(s)).replace("{median}", W(te));
 		return {
 			template: I`
       <div class="sparkline-svg-wrap">
       <svg
         class="sparkline"
-        viewBox="0 0 ${X} ${Z}"
+        viewBox="0 0 ${Y} ${X}"
         preserveAspectRatio="none"
         role="img"
         aria-label=${ne}
         data-points=${JSON.stringify(D)}
-        data-width=${X}
-        data-height=${Z}
+        data-width=${Y}
+        data-height=${X}
       >
         <title>${ne}</title>
         <defs>
@@ -1292,7 +1292,7 @@ function Ot(e) {
         />
         <line
           class="sparkline-hover-line"
-          x1="0" y1="0" x2="0" y2=${Z}
+          x1="0" y1="0" x2="0" y2=${X}
           stroke="var(--primary-text-color)" stroke-width="0.6"
           stroke-dasharray="2,2" opacity="0" pointer-events="none"
         />
@@ -1306,27 +1306,27 @@ function Ot(e) {
       <div class="sparkline-labels">
         ${e.showMinMax ? I`<span>
               <span class="sparkline-minmax-label">${e.translations.min_label}</span>
-              ${G(o)}
-            </span>` : z}
+              ${W(o)}
+            </span>` : R}
         <span class="sparkline-period">
-          ${e.translations.last_7_days}${ee === z ? z : I` · ${ee}`}
+          ${e.translations.last_7_days}${ee === R ? R : I` · ${ee}`}
         </span>
         ${e.showMinMax ? I`<span>
               <span class="sparkline-minmax-label">${e.translations.max_label}</span>
-              ${G(s)}
-            </span>` : z}
+              ${W(s)}
+            </span>` : R}
       </div>
     `,
 			hoverPoints: D,
 			medianDelta: x,
-			viewBoxWidth: X,
-			viewBoxHeight: Z
+			viewBoxWidth: Y,
+			viewBoxHeight: X
 		};
 	} catch (e) {
 		return console.warn("[Tankstellen Austria] sparkline render failed:", e), t;
 	}
 }
-function kt(e, t) {
+function At(e, t) {
 	let n = () => void 0;
 	try {
 		let n = () => {
@@ -1341,7 +1341,7 @@ function kt(e, t) {
 				s = [];
 			}
 			if (!s.length) return null;
-			let c = Number(t.dataset.width) || X, l = Number(t.dataset.height) || Z;
+			let c = Number(t.dataset.width) || Y, l = Number(t.dataset.height) || X;
 			return {
 				svgEl: t,
 				line: r,
@@ -1381,25 +1381,25 @@ function kt(e, t) {
 }
 //#endregion
 //#region src/analytics/best-refuel.ts
-var At = 36e5, Q = 864e5, jt = 14 * Q, Mt = 3 * Q;
-function Nt(e) {
+var jt = 36e5, Mt = 864e5, Nt = 14 * Mt, Pt = 3 * Mt;
+function Ft(e) {
 	let t = new Date(e);
 	t.setHours(0, 0, 0, 0);
 	let n = t.getDay();
 	return t.setDate(t.getDate() - (n === 0 ? 6 : n - 1)), t.getTime();
 }
-function Pt(e, t) {
+function It(e, t) {
 	let n = [], r = (e, t, r) => {
 		if (r <= t || !Number.isFinite(e)) return;
 		let i = t;
 		for (; i < r;) {
-			let t = Math.floor(i / At) * At + At, a = Math.min(r, t), o = new Date(i);
+			let t = Math.floor(i / jt) * jt + jt, a = Math.min(r, t), o = new Date(i);
 			n.push({
 				price: e,
 				t: i,
 				hour: o.getHours(),
 				weekday: o.getDay(),
-				weekKey: Nt(i),
+				weekKey: Ft(i),
 				durationMs: a - i
 			}), i = a;
 		}
@@ -1408,7 +1408,7 @@ function Pt(e, t) {
 	let i = e[e.length - 1];
 	return r(i.value, i.time, t), n;
 }
-function Ft(e) {
+function Lt(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
 		let e = t.get(n.weekKey);
@@ -1416,9 +1416,9 @@ function Ft(e) {
 	}
 	return t;
 }
-var It = .005;
-function Lt(e, t, n) {
-	let r = (e) => e !== void 0 && !Number.isNaN(e) && e - n <= It, i = 0;
+var Rt = .005;
+function zt(e, t, n) {
+	let r = (e) => e !== void 0 && !Number.isNaN(e) && e - n <= Rt, i = 0;
 	for (let n = 1; n <= 23 && r(e[(t + n) % 24]); n++) i = n;
 	let a = 0;
 	for (let n = 1; n <= 23 && r(e[(t - n + 24) % 24]); n++) a = n;
@@ -1427,8 +1427,8 @@ function Lt(e, t, n) {
 		end: (t + i + 1) % 24
 	};
 }
-function Rt(e, t) {
-	let n = e.map((e) => e.length >= t ? Y(e, .5) : NaN), r = -1, i = Infinity;
+function Bt(e, t) {
+	let n = e.map((e) => e.length >= t ? J(e, .5) : NaN), r = -1, i = Infinity;
 	return n.forEach((e, t) => {
 		!Number.isNaN(e) && e < i && (i = e, r = t);
 	}), {
@@ -1438,38 +1438,38 @@ function Rt(e, t) {
 		minVal: i
 	};
 }
-function zt(e, t) {
+function Vt(e, t) {
 	let n = e.medians.filter((e) => !Number.isNaN(e)).sort((e, t) => e - t);
-	return n.length < 2 || e.bestIdx < 0 ? 0 : J((n[Math.floor((n.length - 1) / 2)] - e.minVal) * 100 / t, 0, 1);
+	return n.length < 2 || e.bestIdx < 0 ? 0 : q((n[Math.floor((n.length - 1) / 2)] - e.minVal) * 100 / t, 0, 1);
 }
-function Bt(e) {
+function Ht(e) {
 	if (!e || e.length < 2) return null;
 	let t = Date.now(), n = t - e[0].time;
-	if (n < 7 * Q) return { hasEnoughData: !1 };
-	let r = Pt(e, t);
+	if (n < 7 * Mt) return { hasEnoughData: !1 };
+	let r = It(e, t);
 	if (r.length === 0) return { hasEnoughData: !1 };
-	let i = Ft(r), a = Array.from({ length: 24 }, () => []), o = Array.from({ length: 7 }, () => []);
+	let i = Lt(r), a = Array.from({ length: 24 }, () => []), o = Array.from({ length: 7 }, () => []);
 	for (let e of i.values()) {
 		let n = 0;
 		for (let t of e) n += t.durationMs;
-		if (n < Mt) continue;
+		if (n < Pt) continue;
 		let r = e.map((e) => ({
 			value: e.price,
 			weight: e.durationMs
-		})), i = Y(r, .05), s = Y(r, .95), c = 0;
-		for (let t of e) c += J(t.price, i, s) * t.durationMs;
+		})), i = J(r, .05), s = J(r, .95), c = 0;
+		for (let t of e) c += q(t.price, i, s) * t.durationMs;
 		let l = c / n;
 		for (let n of e) {
-			let e = J(n.price, i, s), r = .5 ** ((t - n.t) / jt), c = {
+			let e = q(n.price, i, s), r = .5 ** ((t - n.t) / Nt), c = {
 				value: e - l,
 				weight: n.durationMs * r
 			};
 			a[n.hour].push(c), o[n.weekday].push(c);
 		}
 	}
-	let s = Rt(a, 3);
+	let s = Bt(a, 3);
 	if (s.bestIdx < 0) return { hasEnoughData: !1 };
-	let c = Rt(o, 3), l = n / Q, u = Math.min(1, l / 28), d = a.filter((e) => e.length >= 3).length / 24, f = zt(s, 1.5), p = s.medians.filter((e) => !Number.isNaN(e)).sort((e, t) => e - t), m = p.length >= 2 ? (p[Math.floor((p.length - 1) / 2)] - s.minVal) * 100 : 0, h = (u + d + f) / 3, g = h >= .75 ? "high" : h >= .5 ? "medium" : "low", _ = o.filter((e) => e.length >= 3).length / 7, v = zt(c, .8), y = (c.bestIdx >= 0 ? (u + _ + v) / 3 : 0) >= .75, b = Lt(s.medians, s.bestIdx, s.minVal);
+	let c = Bt(o, 3), l = n / Mt, u = Math.min(1, l / 28), d = a.filter((e) => e.length >= 3).length / 24, f = Vt(s, 1.5), p = s.medians.filter((e) => !Number.isNaN(e)).sort((e, t) => e - t), m = p.length >= 2 ? (p[Math.floor((p.length - 1) / 2)] - s.minVal) * 100 : 0, h = (u + d + f) / 3, g = h >= .75 ? "high" : h >= .5 ? "medium" : "low", _ = o.filter((e) => e.length >= 3).length / 7, v = Vt(c, .8), y = (c.bestIdx >= 0 ? (u + _ + v) / 3 : 0) >= .75, b = zt(s.medians, s.bestIdx, s.minVal);
 	return {
 		hasEnoughData: !0,
 		hour: b.start,
@@ -1484,30 +1484,30 @@ function Bt(e) {
 		}
 	};
 }
-function Vt(e) {
+function Ut(e) {
 	if (!e || e.length < 2) return null;
 	let t = Date.now();
-	if (t - e[0].time < 7 * Q) return null;
-	let n = Pt(e, t);
+	if (t - e[0].time < 7 * Mt) return null;
+	let n = It(e, t);
 	if (n.length === 0) return null;
-	let r = Ft(n), i = Array.from({ length: 24 }, () => []);
+	let r = Lt(n), i = Array.from({ length: 24 }, () => []);
 	for (let e of r.values()) {
 		let t = 0;
 		for (let n of e) t += n.durationMs;
-		if (t < Mt) continue;
+		if (t < Pt) continue;
 		let n = e.map((e) => ({
 			value: e.price,
 			weight: e.durationMs
-		})), r = Y(n, .05), a = Y(n, .95);
+		})), r = J(n, .05), a = J(n, .95);
 		for (let t of e) i[t.hour].push({
-			value: J(t.price, r, a),
+			value: q(t.price, r, a),
 			weight: t.durationMs
 		});
 	}
 	let a = Array(24).fill(null), o = Array(24).fill(null), s = 0;
 	for (let e = 0; e < 24; e++) {
 		let t = i[e];
-		t.length < 3 || (a[e] = Y(t, .1), o[e] = Y(t, .9), s++);
+		t.length < 3 || (a[e] = J(t, .1), o[e] = J(t, .9), s++);
 	}
 	return s < 6 ? null : {
 		minByHour: a,
@@ -1516,7 +1516,7 @@ function Vt(e) {
 }
 //#endregion
 //#region src/styles.ts
-var Ht = c`
+var Wt = c`
   :host {
     /* color-scheme enables light-dark() and steers forced-colors palette
        selection (WCAG 1.4.11). HA's active theme drives the resolution. */
@@ -2432,7 +2432,7 @@ var Ht = c`
       scroll-behavior: auto !important;
     }
   }
-`, Ut = c`
+`, Gt = c`
   :host {
     /* color-scheme enables light-dark() and steers forced-colors palette
        selection. The editor is its own Lit element with its own shadow
@@ -2754,21 +2754,21 @@ var Ht = c`
 `;
 //#endregion
 //#region src/utils.ts
-function Wt(e) {
+function Kt(e) {
 	return typeof e == "string" && /^https?:\/\//i.test(e) ? e : "";
 }
-function Gt(e) {
-	return typeof e == "string" ? e.startsWith("geo:0,0?q=") ? e : Wt(e) : "";
+function qt(e) {
+	return typeof e == "string" ? e.startsWith("geo:0,0?q=") ? e : Kt(e) : "";
 }
-function Kt(e, t) {
+function Jt(e, t) {
 	return /iPhone|iPad|iPod/.test(e) || /Macintosh/.test(e) && t > 1 ? "ios" : /Android/.test(e) ? "android" : "desktop";
 }
-function qt(e, t) {
+function Yt(e, t) {
 	return e === "google" || e === "apple" ? e : t === "ios" ? "apple" : t === "android" ? "geo" : "google";
 }
 //#endregion
 //#region src/types.ts
-function Jt(e, t, n) {
+function Xt(e, t, n) {
 	e.dispatchEvent(new CustomEvent(t, {
 		detail: n,
 		bubbles: !0,
@@ -2776,17 +2776,36 @@ function Jt(e, t, n) {
 	}));
 }
 //#endregion
+//#region \0@oxc-project+runtime@0.139.0/helpers/esm/decorate.js
+function Z(e, t, n, r) {
+	var i = arguments.length, a = i < 3 ? t : r === null ? r = Object.getOwnPropertyDescriptor(t, n) : r, o;
+	if (typeof Reflect == "object" && typeof Reflect.decorate == "function") a = Reflect.decorate(e, t, n, r);
+	else for (var s = e.length - 1; s >= 0; s--) (o = e[s]) && (a = (i < 3 ? o(a) : i > 3 ? o(t, n, a) : o(t, n)) || a);
+	return i > 3 && a && Object.defineProperty(t, n, a), a;
+}
+//#endregion
 //#region src/editor.ts
-function $(e) {
+function Zt(e) {
 	return e.replace(/[<>"'&]/g, "").slice(0, 50).trim();
 }
-(@De("tankstellen-austria-card-editor") class extends H {
-	@Ae({ attribute: !1 }) hass;
-	@U() _config = { type: "tankstellen-austria-card" };
-	@U() _expandedCarIcon = null;
-	@U() _pendingRemove = null;
-	@U() _copiedPulse = !1;
-	_copiedTimeout;
+var Q = class extends V {
+	constructor(...e) {
+		super(...e), this._config = { type: "tankstellen-austria-card" }, this._expandedCarIcon = null, this._pendingRemove = null, this._copiedPulse = !1, this._computeLabel = (e) => {
+			let t = `ui.panel.lovelace.editor.card.generic.${e.name}`, n = this.hass?.localize?.(t);
+			if (n) return n;
+			let r = this._et(e.name);
+			return r === `editor.${e.name}` ? e.name : r;
+		}, this._computeHelper = (e) => {
+			let t = `${e.name}_helper`, n = this._et(t);
+			return n === `editor.${t}` ? void 0 : n;
+		}, this._onFormChanged = (e) => {
+			let t = e.detail.value, n = {
+				...this._config,
+				...t
+			};
+			n.map_provider === "auto" && delete n.map_provider, this._config = n, Xt(this, "config-changed", { config: n });
+		};
+	}
 	setConfig(e) {
 		this._config = { ...e };
 	}
@@ -2800,27 +2819,27 @@ function $(e) {
 		};
 	}
 	_et(e, t) {
-		return ft(`editor.${e}`, this._ctx(), t);
+		return pt(`editor.${e}`, this._ctx(), t);
 	}
 	_ct(e, t) {
-		return ft(`card.${e}`, this._ctx(), t);
+		return pt(`card.${e}`, this._ctx(), t);
 	}
 	_fireChanged() {
-		Jt(this, "config-changed", { config: { ...this._config } });
+		Xt(this, "config-changed", { config: { ...this._config } });
 	}
 	_entityLabel(e) {
 		let t = this.hass?.states[e];
 		if (!t) return e;
-		let n = t.attributes, r = typeof n.station_name == "string" && n.station_name.trim() ? n.station_name.trim() : typeof n.device == "string" && n.device.trim() ? n.device.trim() : typeof n.friendly_name == "string" && n.friendly_name.trim() ? n.friendly_name.trim() : e, i = typeof n.fuel_type == "string" ? n.fuel_type : void 0, a = i?.toLowerCase() === "diesel" ? "DIE" : i?.toLowerCase() === "super" || i?.toLowerCase() === "super95" || i?.toLowerCase() === "e5" || i?.toLowerCase() === "95" ? "SUP" : i?.toLowerCase() === "cng" || i?.toLowerCase() === "gas" ? "GAS" : i, o = typeof n.fuel_type_name == "string" && n.fuel_type_name.trim() ? n.fuel_type_name.trim() : mt(a ?? e, this._ctx());
+		let n = t.attributes, r = typeof n.station_name == "string" && n.station_name.trim() ? n.station_name.trim() : typeof n.device == "string" && n.device.trim() ? n.device.trim() : typeof n.friendly_name == "string" && n.friendly_name.trim() ? n.friendly_name.trim() : e, i = typeof n.fuel_type == "string" ? n.fuel_type : void 0, a = i?.toLowerCase() === "diesel" ? "DIE" : i?.toLowerCase() === "super" || i?.toLowerCase() === "super95" || i?.toLowerCase() === "e5" || i?.toLowerCase() === "95" ? "SUP" : i?.toLowerCase() === "cng" || i?.toLowerCase() === "gas" ? "GAS" : i, o = typeof n.fuel_type_name == "string" && n.fuel_type_name.trim() ? n.fuel_type_name.trim() : ht(a ?? e, this._ctx());
 		return o && !r.toLowerCase().includes(o.toLowerCase()) ? `${r} · ${o}` : r;
 	}
 	_commitEntities(e) {
-		let t = e.map((e) => $(e)).filter(Boolean), n = { ...this._config };
+		let t = e.map((e) => Zt(e)).filter(Boolean), n = { ...this._config };
 		t.length ? n.entities = t : delete n.entities, this._config = n, this._fireChanged();
 	}
 	_onEntityChange(e, t) {
 		t.stopPropagation();
-		let n = t.target, r = $(n.value), i = [...this._config.entities ?? []];
+		let n = t.target, r = Zt(n.value), i = [...this._config.entities ?? []];
 		r ? i[e] = r : i.splice(e, 1), this._commitEntities(i);
 	}
 	_onAddEntity() {
@@ -2902,23 +2921,6 @@ function $(e) {
 		}
 		return n;
 	}
-	_computeLabel = (e) => {
-		let t = `ui.panel.lovelace.editor.card.generic.${e.name}`, n = this.hass?.localize?.(t);
-		if (n) return n;
-		let r = this._et(e.name);
-		return r === `editor.${e.name}` ? e.name : r;
-	};
-	_computeHelper = (e) => {
-		let t = `${e.name}_helper`, n = this._et(t);
-		return n === `editor.${t}` ? void 0 : n;
-	};
-	_onFormChanged = (e) => {
-		let t = e.detail.value, n = {
-			...this._config,
-			...t
-		};
-		n.map_provider === "auto" && delete n.map_provider, this._config = n, Jt(this, "config-changed", { config: n });
-	};
 	render() {
 		let e = this._config.show_history !== !1, t = this._config.show_best_refuel !== !1, n = e && t, r = (this._config.entities ?? []).filter((e) => !!this.hass && !this.hass.states[e]);
 		return I`
@@ -2942,7 +2944,7 @@ function $(e) {
             </ha-alert>
           `)}
 
-        ${n ? this._renderRecorderHint() : z}
+        ${n ? this._renderRecorderHint() : R}
         ${this._renderTabLabelsSection()}
         ${this._renderCarsRosterSection()}
       </div>
@@ -3015,12 +3017,12 @@ function $(e) {
     `;
 	}
 	_renderTabLabelsSection() {
-		if (!this.hass) return z;
+		if (!this.hass) return R;
 		let e = (this._config.entities ?? []).map((e) => ({
 			eid: e,
 			state: this.hass.states[e]
 		})).filter((e) => !!e.state);
-		if (e.length < 2) return z;
+		if (e.length < 2) return R;
 		let t = this._config.tab_labels ?? {};
 		return I`
       <div class="editor-section">
@@ -3071,7 +3073,7 @@ function $(e) {
 		return e;
 	}
 	_renderPaymentChipsSection() {
-		if (this._config.show_payment_methods === !1) return z;
+		if (this._config.show_payment_methods === !1) return R;
 		let e = this._collectApiPaymentKeys(), t = this._config.payment_filter ?? [], n = new Set(e);
 		for (let e of t) n.add(e);
 		return I`
@@ -3105,7 +3107,7 @@ function $(e) {
 		let r = t.includes(e), i = e === this._pendingRemove, a = !n.has(e), o = e === "cash" ? this._ct("cash") : e === "debit_card" ? this._ct("debit_card") : e === "credit_card" ? this._ct("credit_card") : e;
 		return I`
       <button
-        class=${W({
+        class=${U({
 			"pm-filter-chip": !0,
 			active: r,
 			confirm: i
@@ -3119,12 +3121,12 @@ function $(e) {
     `;
 	}
 	_renderCarsRosterSection() {
-		if (this._config.show_cars !== !0) return z;
+		if (this._config.show_cars !== !0) return R;
 		let e = this._config.show_car_fillup !== !1, t = this._config.show_car_consumption !== !1, n = this._config.cars ?? [];
 		return I`
       <div class="editor-section">
         <div class="section-header">${this._et("section_cars")}</div>
-        ${!e && !t ? I`<div class="editor-hint">${this._et("cars_both_off_hint")}</div>` : z}
+        ${!e && !t ? I`<div class="editor-hint">${this._et("cars_both_off_hint")}</div>` : R}
         ${n.map((e, t) => this._renderCarRow(e, t))}
         <button class="car-add-btn" type="button" @click=${this._onAddCar}>
           ${this._et("add_car")}
@@ -3138,7 +3140,7 @@ function $(e) {
       <div class="car-editor-group">
         <div class="car-editor-row">
           <button
-            class=${W({
+            class=${U({
 			"car-icon-btn": !0,
 			active: n
 		})}
@@ -3178,7 +3180,7 @@ function $(e) {
 			"GAS"
 		].map((t) => I`
                 <option value=${t} ?selected=${e.fuel_type === t}>
-                  ${mt(t, this._ctx())}
+                  ${ht(t, this._ctx())}
                 </option>
               `)}
           </select>
@@ -3190,7 +3192,7 @@ function $(e) {
             autocomplete="off"
             aria-label=${this._et("car_tank_placeholder")}
             aria-invalid=${a ? "true" : "false"}
-            aria-describedby=${a ? s : z}
+            aria-describedby=${a ? s : R}
             placeholder=${this._et("car_tank_placeholder")}
             .value=${e.tank_size == null ? "" : String(e.tank_size)}
             @click=${this._stop}
@@ -3209,7 +3211,7 @@ function $(e) {
             autocomplete="off"
             aria-label=${this._et("car_consumption_placeholder")}
             aria-invalid=${o ? "true" : "false"}
-            aria-describedby=${o ? c : z}
+            aria-describedby=${o ? c : R}
             placeholder=${this._et("car_consumption_placeholder")}
             .value=${e.consumption == null ? "" : String(e.consumption)}
             @click=${this._stop}
@@ -3232,16 +3234,16 @@ function $(e) {
         ${a ? I`<ha-alert
               id=${s}
               alert-type="error"
-            >${this._et("tank_size_range_error")}</ha-alert>` : z}
+            >${this._et("tank_size_range_error")}</ha-alert>` : R}
         ${o ? I`<ha-alert
               id=${c}
               alert-type="error"
-            >${this._et("consumption_range_error")}</ha-alert>` : z}
+            >${this._et("consumption_range_error")}</ha-alert>` : R}
         ${n ? I`
               <div id=${i} class="car-icon-picker">
-                ${Ie.map((e) => I`
+                ${Le.map((e) => I`
                     <button
-                      class=${W({
+                      class=${U({
 			"car-icon-option": !0,
 			active: r === e
 		})}
@@ -3255,7 +3257,7 @@ function $(e) {
                     </button>
                   `)}
               </div>
-            ` : z}
+            ` : R}
       </div>
     `;
 	}
@@ -3271,7 +3273,7 @@ function $(e) {
 	}
 	_onTabLabelChange(e, t) {
 		t.stopPropagation();
-		let n = t.target, r = $(n.value), i = { ...this._config.tab_labels ?? {} };
+		let n = t.target, r = Zt(n.value), i = { ...this._config.tab_labels ?? {} };
 		r ? i[e] = r : delete i[e];
 		let a = { ...this._config };
 		Object.keys(i).length ? a.tab_labels = i : delete a.tab_labels, this._config = a, this._fireChanged();
@@ -3298,7 +3300,7 @@ function $(e) {
 	_onAddCustomPm() {
 		let e = this.shadowRoot?.getElementById("pm-custom-input");
 		if (!e) return;
-		let t = $(String(e.value ?? ""));
+		let t = Zt(String(e.value ?? ""));
 		if (!t) return;
 		this._pendingRemove = null;
 		let n = [...this._config.payment_filter ?? []];
@@ -3340,7 +3342,7 @@ function $(e) {
 			"DIE",
 			"SUP",
 			"GAS"
-		].includes(r) && (o.fuel_type = r) : o.name = $(r);
+		].includes(r) && (o.fuel_type = r) : o.name = Zt(r);
 		i[e] = o, this._config = {
 			...this._config,
 			cars: i
@@ -3367,15 +3369,18 @@ function $(e) {
 			cars: t
 		}, this._fireChanged();
 	}
-	static styles = Ut;
-}), window.customCards = window.customCards || [], window.customCards.push({
+	static {
+		this.styles = Gt;
+	}
+};
+Z([je({ attribute: !1 })], Q.prototype, "hass", void 0), Z([H()], Q.prototype, "_config", void 0), Z([H()], Q.prototype, "_expandedCarIcon", void 0), Z([H()], Q.prototype, "_pendingRemove", void 0), Z([H()], Q.prototype, "_copiedPulse", void 0), Q = Z([Oe("tankstellen-austria-card-editor")], Q), window.customCards = window.customCards || [], window.customCards.push({
 	type: "tankstellen-austria-card",
 	name: "Fuel prices Card",
 	description: "Fuel price sensors with sparklines, best-refuel analytics, and car cost calculations.",
 	preview: !0,
 	documentationURL: "https://github.com/rolandzeiner/tankstellen-austria"
 });
-function Yt(e) {
+function Qt(e) {
 	switch (e?.trim().toLowerCase()) {
 		case "diesel":
 		case "d":
@@ -3390,10 +3395,10 @@ function Yt(e) {
 		default: return e ?? "";
 	}
 }
-function Xt(...e) {
+function $t(...e) {
 	for (let t of e) if (typeof t == "string" && t.trim().length > 0) return t.trim();
 }
-function Zt(e) {
+function en(e) {
 	let t = [
 		e.street,
 		e.house_number,
@@ -3402,7 +3407,10 @@ function Zt(e) {
 	].filter((e) => e != null && e !== "").map((e) => String(e).trim()).filter((e) => e.length > 0);
 	return t.length ? t.join(" ") : void 0;
 }
-var Qt = @De("tankstellen-austria-card") class extends H {
+var $ = class extends V {
+	constructor(...e) {
+		super(...e), this._activeTab = 0, this._expandedStations = /* @__PURE__ */ new Set(), this._history = {}, this._versionMismatch = null, this._lastManualRefresh = 0, this._noNewData = !1, this._historyError = !1, this._cooldownTick = 0, this._initDone = !1, this._onDismissVersionBanner = () => {}, this._onVersionReload = async () => {};
+	}
 	static getConfigElement() {
 		return document.createElement("tankstellen-austria-card-editor");
 	}
@@ -3424,30 +3432,14 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 			cars: []
 		};
 	}
-	@Ae({ attribute: !1 }) hass;
-	@U() _config;
-	@U() _activeTab = 0;
-	@U() _expandedStations = /* @__PURE__ */ new Set();
-	@U() _history = {};
-	@U() _versionMismatch = null;
-	@U() _lastManualRefresh = 0;
-	@U() _noNewData = !1;
-	@U() _historyError = !1;
-	@U() _cooldownTick = 0;
-	_initDone = !1;
-	_historyInterval;
-	_cooldownInterval;
-	_postRefreshTimeout;
-	_cooldownTimeout;
-	_sparklineCleanup;
 	setConfig(e) {
 		if (!e || typeof e != "object" || Array.isArray(e)) throw Error("tankstellen-austria-card: config must be an object");
 		let t = e.entities;
 		if (t !== void 0 && typeof t != "string" && !Array.isArray(t)) throw Error("tankstellen-austria-card: config.entities must be a string or array of entity IDs");
-		if (this._config = ze(e), this._config.entities) {
+		if (this._config = Be(e), this._config.entities) {
 			let e = {}, t = !1;
 			for (let n of this._config.entities) {
-				let r = yt(n);
+				let r = bt(n);
 				r.length >= 2 && (e[n] = r, t = !0);
 			}
 			t && (this._history = {
@@ -3494,7 +3486,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 		};
 	}
 	_t(e, t) {
-		return ft(`card.${e}`, this._ctx(), t);
+		return pt(`card.${e}`, this._ctx(), t);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this._historyInterval !== void 0 && (clearInterval(this._historyInterval), this._historyInterval = void 0), this._cooldownInterval !== void 0 && (clearInterval(this._cooldownInterval), this._cooldownInterval = void 0), this._postRefreshTimeout !== void 0 && (clearTimeout(this._postRefreshTimeout), this._postRefreshTimeout = void 0), this._cooldownTimeout !== void 0 && (clearTimeout(this._cooldownTimeout), this._cooldownTimeout = void 0), this._sparklineCleanup &&= (this._sparklineCleanup(), void 0), this._initDone = !1;
@@ -3502,13 +3494,13 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 	updated(e) {
 		!this._initDone && this.hass && this._config && (this._initDone = !0, this._fetchAllHistory(), this._historyInterval = window.setInterval(() => {
 			this._fetchAllHistory();
-		}, Fe)), this._reattachSparklineHover();
+		}, Ie)), this._reattachSparklineHover();
 	}
 	async _fetchAllHistory() {
 		try {
 			let e = this._resolveEntities();
 			await Promise.all(e.map(async (e) => {
-				let t = await vt(this.hass, e.entity_id);
+				let t = await yt(this.hass, e.entity_id);
 				this._history = {
 					...this._history,
 					[e.entity_id]: t
@@ -3523,13 +3515,13 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 		this._sparklineCleanup &&= (this._sparklineCleanup(), void 0);
 		let e = this.shadowRoot?.querySelector(".sparkline-container[data-entity]");
 		if (!e) return;
-		let t = pt(this._ctx()), n = dt(this._ctx()), r = (e) => {
+		let t = mt(this._ctx()), n = ft(this._ctx()), r = (e) => {
 			let r = new Date(e);
 			return `${t[r.getDay()]?.slice(0, 2) ?? ""} ${n === "de" ? `${r.getDate()}.${r.getMonth() + 1}.` : `${r.getMonth() + 1}/${r.getDate()}`} ${String(r.getHours()).padStart(2, "0")}:${String(r.getMinutes()).padStart(2, "0")}`;
 		};
-		this._sparklineCleanup = kt(e, {
+		this._sparklineCleanup = At(e, {
 			formatTime: r,
-			formatPrice: Ge
+			formatPrice: Ke
 		});
 	}
 	render() {
@@ -3553,7 +3545,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
         <div class="wrap">
           ${this._historyError ? I`<ha-alert alert-type="warning" role="alert">
                 ${this._t("history_fetch_error")}
-              </ha-alert>` : z}
+              </ha-alert>` : R}
           <section class="station-section" style="--tankst-accent: var(--primary-color);">
             ${this._renderHeader(n)}
             ${this._renderHero(n)}
@@ -3565,14 +3557,13 @@ var Qt = @De("tankstellen-austria-card") class extends H {
     `;
 	}
 	_renderFooter(e) {
-		return z;
+		return R;
 	}
 	_renderVersionBanner() {
-		return z;
+		return R;
 	}
-	_onDismissVersionBanner = () => {};
 	_renderTabs(e, t) {
-		if (e.length <= 1) return z;
+		if (e.length <= 1) return R;
 		let n = this._config.tab_labels ?? {};
 		return I`
       <div class="tabs" role="tablist">
@@ -3582,7 +3573,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
             <button
               type="button"
               role="tab"
-              class=${W({
+              class=${U({
 				tab: !0,
 				active: s
 			})}
@@ -3600,10 +3591,10 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 	}
 	_entityLabel(e) {
 		let t = e.attributes;
-		return Xt(t.station_name, t.device, t.friendly_name, e.entity_id) ?? e.entity_id;
+		return $t(t.station_name, t.device, t.friendly_name, e.entity_id) ?? e.entity_id;
 	}
 	_entitySubtitle(e) {
-		let t = e.attributes, n = Yt(t.fuel_type), r = [typeof t.fuel_type_name == "string" && t.fuel_type_name.trim() ? t.fuel_type_name.trim() : mt(n, this._ctx()), Zt(t)].filter((e) => typeof e == "string" && e.length > 0);
+		let t = e.attributes, n = Qt(t.fuel_type), r = [typeof t.fuel_type_name == "string" && t.fuel_type_name.trim() ? t.fuel_type_name.trim() : ht(n, this._ctx()), en(t)].filter((e) => typeof e == "string" && e.length > 0);
 		return r.length ? r.join(" · ") : void 0;
 	}
 	_entityPrice(e) {
@@ -3611,7 +3602,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 		return Number.isFinite(t) ? t : null;
 	}
 	_renderHeader(e) {
-		if (this._config?.hide_header === !0) return z;
+		if (this._config?.hide_header === !0) return R;
 		let t = this._entityLabel(e), n = this._entitySubtitle(e);
 		return I`
       <header class="header">
@@ -3620,14 +3611,14 @@ var Qt = @De("tankstellen-austria-card") class extends H {
         </div>
         <div class="header-text">
           <h2 class="title">${t}</h2>
-          ${n ? I`<p class="subtitle">${n}</p>` : z}
+          ${n ? I`<p class="subtitle">${n}</p>` : R}
         </div>
       </header>
     `;
 	}
 	_renderDynamicChips(e) {
 		let t = !!e.last_updated;
-		return !t && !this._noNewData ? z : I`
+		return !t && !this._noNewData ? R : I`
       <div class="chip-row" aria-live="polite">
         ${t ? I`<span class="chip muted">
               <ha-icon icon="mdi:clock-outline" aria-hidden="true"></ha-icon>
@@ -3635,22 +3626,22 @@ var Qt = @De("tankstellen-austria-card") class extends H {
                 .hass=${this.hass}
                 .datetime=${new Date(e.last_updated)}
               ></ha-relative-time>
-            </span>` : z}
+            </span>` : R}
         ${this._noNewData ? I`<span class="chip warn" role="status">
               <ha-icon icon="mdi:alert-circle-outline" aria-hidden="true"></ha-icon>
               ${this._t("no_new_data")}
-            </span>` : z}
+            </span>` : R}
       </div>
     `;
 	}
 	_renderRefreshButton() {
-		let e = Pe - (Date.now() - this._lastManualRefresh), t = e > 0, n = t ? (() => {
+		let e = Fe - (Date.now() - this._lastManualRefresh), t = e > 0, n = t ? (() => {
 			let t = Math.ceil(e / 1e3);
 			return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 		})() : "";
 		return I`
       <button
-        class=${W({
+        class=${U({
 			"btn-primary": !0,
 			cooling: t
 		})}
@@ -3666,11 +3657,11 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 	}
 	_renderHero(e) {
 		let t = this._entityPrice(e);
-		return t == null || this._config.hide_header_price === !0 ? z : I`
+		return t == null || this._config.hide_header_price === !0 ? R : I`
       <div class="hero">
         <div class="metric">
           <div class="metric-value">
-            <span class="metric-num">${Ge(t)}</span>
+            <span class="metric-num">${Ke(t)}</span>
           </div>
           <div class="metric-label">${this._t("price")}</div>
         </div>
@@ -3678,12 +3669,12 @@ var Qt = @De("tankstellen-austria-card") class extends H {
     `;
 	}
 	_renderSparklineBlock(e) {
-		return this._config.show_history === !1 ? z : this._renderSparkline(e);
+		return this._config.show_history === !1 ? R : this._renderSparkline(e);
 	}
 	_renderSparkline(e) {
 		let t = e.entity_id, n = this._history[t] ?? [];
-		if (n.length < 2) return z;
-		let r = this._config.show_median_line === !0, i = this._config.show_hour_envelope === !0, a = this._config.show_noon_markers === !0, o = this._config.show_minmax !== !1, s = i ? Vt(n) : null, c = this._config.show_best_refuel === !1 ? null : Bt(n), l = Ot({
+		if (n.length < 2) return R;
+		let r = this._config.show_median_line === !0, i = this._config.show_hour_envelope === !0, a = this._config.show_noon_markers === !0, o = this._config.show_minmax !== !1, s = i ? Ut(n) : null, c = this._config.show_best_refuel === !1 ? null : Ht(n), l = kt({
 			points: n,
 			showMedianLine: r,
 			showHourEnvelope: i,
@@ -3702,7 +3693,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 				sparkline_aria_simple: this._t("sparkline_aria_simple")
 			}
 		});
-		return l.template === z ? z : I`
+		return l.template === R ? R : I`
       <div
         class="sparkline-container"
         data-entity=${t}
@@ -3720,7 +3711,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
     `;
 	}
 	_renderRecommendation(e) {
-		if (!e) return z;
+		if (!e) return R;
 		if (!e.hasEnoughData) return I`
         <div class="refuel-hint">
           <ha-icon icon="mdi:information-outline" class="refuel-icon" aria-hidden="true"></ha-icon>
@@ -3729,7 +3720,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
       `;
 		let t = e.hour ?? 0, n = e.hour_end ?? (t + 1) % 24, r = String(t).padStart(2, "0"), i = String(n).padStart(2, "0"), a;
 		if (e.weekday != null) {
-			let t = pt(this._ctx())[e.weekday] ?? "";
+			let t = mt(this._ctx())[e.weekday] ?? "";
 			a = this._t("best_refuel_hour_weekday", {
 				h1: r,
 				h2: i,
@@ -3768,15 +3759,15 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 	}
 	_renderCars(e) {
 		let t = this._config.show_cars === !0, n = this._config.show_car_fillup !== !1, r = this._config.show_car_consumption !== !1;
-		if (!t || !n && !r) return z;
-		let i = Yt(e.attributes.fuel_type), a = this._entityPrice(e);
-		if (a == null) return z;
-		let o = (this._config.cars ?? []).filter((e) => Yt(e.fuel_type) === i && e.tank_size > 0 && e.name), s = n ? o : o.filter((e) => Number(e.consumption) > 0);
+		if (!t || !n && !r) return R;
+		let i = Qt(e.attributes.fuel_type), a = this._entityPrice(e);
+		if (a == null) return R;
+		let o = (this._config.cars ?? []).filter((e) => Qt(e.fuel_type) === i && e.tank_size > 0 && e.name), s = n ? o : o.filter((e) => Number(e.consumption) > 0);
 		return s.length ? I`
       <div class="cars-fillup">
         ${s.map((e) => this._renderCarRow(e, a, n, r))}
       </div>
-    ` : z;
+    ` : R;
 	}
 	_renderCarRow(e, t, n, r) {
 		let i = Number(e.consumption), a = Number.isFinite(i) && i > 0 ? i.toFixed(1).replace(".", ",") : "";
@@ -3796,7 +3787,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
                 <span class="car-per100-label">${a} l/100 km</span>
                 <span class="car-per100-cost">${o} / 100 km</span>
               </div>
-            ` : z}
+            ` : R}
       `;
 		}
 		let o = t == null ? "–" : `€ ${(t * i).toFixed(2).replace(".", ",")}`;
@@ -3812,8 +3803,8 @@ var Qt = @De("tankstellen-austria-card") class extends H {
     `;
 	}
 	_renderStationList(e, t) {
-		let n = e.attributes.stations ?? [], r = parseInt(String(this._config.max_stations), 10), i = Number.isFinite(r) ? Math.max(0, Math.min(5, r)) : 5, a = this._config.payment_filter ?? [], o = this._config.payment_highlight_mode === !0, s = o ? n : n.filter((e) => He(e, a));
-		return i === 0 ? z : !s.length && a.length && n.length ? I`
+		let n = e.attributes.stations ?? [], r = parseInt(String(this._config.max_stations), 10), i = Number.isFinite(r) ? Math.max(0, Math.min(5, r)) : 5, a = this._config.payment_filter ?? [], o = this._config.payment_highlight_mode === !0, s = o ? n : n.filter((e) => Ue(e, a));
+		return i === 0 ? R : !s.length && a.length && n.length ? I`
         <div class="empty">
           ${this._t("payment_filter_active")} — ${this._t("no_data")}
         </div>
@@ -3824,17 +3815,17 @@ var Qt = @De("tankstellen-austria-card") class extends H {
     ` : I`<div class="empty">${this._t("no_data")}</div>`;
 	}
 	_renderStation(e, t, n, r, i) {
-		let a = this._config.show_index !== !1, o = this._config.show_map_links !== !1, s = this._config.show_distance === !0, c = this._config.show_opening_hours !== !1, l = this._config.show_payment_methods !== !1, u = e.location ?? {}, d = `${n}|${e.name ?? ""}|${u.address ?? ""}`, f = this._expandedStations.has(d), p = e.open === !1, m = !p && We(e), h = i && r.length > 0 && He(e, r), g = h ? Ue(e, r, {
+		let a = this._config.show_index !== !1, o = this._config.show_map_links !== !1, s = this._config.show_distance === !0, c = this._config.show_opening_hours !== !1, l = this._config.show_payment_methods !== !1, u = e.location ?? {}, d = `${n}|${e.name ?? ""}|${u.address ?? ""}`, f = this._expandedStations.has(d), p = e.open === !1, m = !p && Ge(e), h = i && r.length > 0 && Ue(e, r), g = h ? We(e, r, {
 			cash: this._t("cash"),
 			debit_card: this._t("debit_card"),
 			credit_card: this._t("credit_card")
-		}) : [], _ = c && !!e.opening_hours?.length, v = l && Be(e.payment_methods), y = _ || v, b = [
+		}) : [], _ = c && !!e.opening_hours?.length, v = l && Ve(e.payment_methods), y = _ || v, b = [
 			e.name || "–",
 			u.city ?? "",
-			Ge(e.price)
-		].filter(Boolean).join(", "), x = y ? `tsa-station-detail-${n}-${t}` : void 0, S = !!e.name, C = u.city ?? "", w = u.address ?? "", T = [u.postalCode, C].filter((e) => e != null && e !== "").join(" "), E = T ? I`<span lang="de">${T}</span>` : z, D = w ? I`<span lang="de">${w}</span>` : z, O = E !== z && D !== z ? ", " : "";
+			Ke(e.price)
+		].filter(Boolean).join(", "), x = y ? `tsa-station-detail-${n}-${t}` : void 0, S = !!e.name, C = u.city ?? "", w = u.address ?? "", T = [u.postalCode, C].filter((e) => e != null && e !== "").join(" "), E = T ? I`<span lang="de">${T}</span>` : R, D = w ? I`<span lang="de">${w}</span>` : R, O = E !== R && D !== R ? ", " : "";
 		return I`
-      <div class=${W({
+      <div class=${U({
 			station: !0,
 			"pm-highlight": h
 		})}>
@@ -3842,30 +3833,30 @@ var Qt = @De("tankstellen-austria-card") class extends H {
           class="station-main"
           role=${y ? "button" : "group"}
           tabindex=${y ? "0" : "-1"}
-          aria-expanded=${y ? f ? "true" : "false" : z}
-          aria-controls=${x ?? z}
+          aria-expanded=${y ? f ? "true" : "false" : R}
+          aria-controls=${x ?? R}
           aria-label=${b}
           @click=${() => this._onStationClick(d)}
           @keydown=${(e) => this._onStationKeydown(e, d, y)}
         >
-          ${a ? I`<div class="index-tile" aria-hidden="true">${t + 1}</div>` : z}
+          ${a ? I`<div class="index-tile" aria-hidden="true">${t + 1}</div>` : R}
           <div class="info">
             <div class="name">
               ${S ? I`<span lang="de">${e.name}</span>` : "–"}
               ${p ? I`<span class="flag closed">${this._t("closed")}</span>` : m ? I`<span class="flag closing-soon"
                       >${this._t("closing_soon")}</span
-                    >` : z}
+                    >` : R}
               ${g.map((e) => I`<span class="chip match">${e}</span>`)}
             </div>
             <div class="address">
               ${E}${O}${D}
             </div>
           </div>
-          <div class="price">${Ge(e.price)}</div>
+          <div class="price">${Ke(e.price)}</div>
           ${(() => {
-			let t = z;
+			let t = R;
 			if (o) {
-				let n = qt(this._config.map_provider ?? "auto", Kt(navigator.userAgent, navigator.maxTouchPoints)), r = Gt(qe(u, e.name ?? "", n));
+				let n = Yt(this._config.map_provider ?? "auto", Jt(navigator.userAgent, navigator.maxTouchPoints)), r = qt(Je(u, e.name ?? "", n));
 				r && (t = I`
                   <a
                     class="icon-action map"
@@ -3884,12 +3875,12 @@ var Qt = @De("tankstellen-austria-card") class extends H {
                 `);
 			}
 			let n = s && e.distance_m != null ? I`<span class="distance" lang="de"
-                    >${Ke(e.distance_m)}</span
-                  >` : z;
-			return t === z && n === z ? z : I`<div
-              class=${W({
+                    >${qe(e.distance_m)}</span
+                  >` : R;
+			return t === R && n === R ? R : I`<div
+              class=${U({
 				"map-action": !0,
-				"has-distance": n !== z
+				"has-distance": n !== R
 			})}
             >
               ${t}${n}
@@ -3899,22 +3890,22 @@ var Qt = @De("tankstellen-austria-card") class extends H {
                 class="expander-chevron"
                 icon="mdi:chevron-down"
                 aria-hidden="true"
-              ></ha-icon>` : z}
+              ></ha-icon>` : R}
         </div>
         ${y ? I`
               <div
                 id=${x}
-                class=${W({
+                class=${U({
 			"station-detail": !0,
 			expanded: f
 		})}
               >
                 <div class="detail-cols">
-                  ${_ ? I`<div class="detail-col">${this._renderHours(e.opening_hours ?? [])}</div>` : z}
-                  ${v ? I`<div class="detail-col">${this._renderPaymentMethods(e.payment_methods)}</div>` : z}
+                  ${_ ? I`<div class="detail-col">${this._renderHours(e.opening_hours ?? [])}</div>` : R}
+                  ${v ? I`<div class="detail-col">${this._renderPaymentMethods(e.payment_methods)}</div>` : R}
                 </div>
               </div>
-            ` : z}
+            ` : R}
       </div>
     `;
 	}
@@ -3922,15 +3913,15 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 		let t = e.find((e) => e.day === "MO") ?? e[0], n = e.find((e) => e.day === "SA") ?? e[5], r = e.find((e) => e.day === "SO") ?? e[6], i = e.find((e) => e.day === "FE");
 		return I`
       <div class="hours-grid">
-        ${t ? I`<span class="day">${this._t("mon_fri")}</span><span>${t.from} – ${t.to}</span>` : z}
-        ${n ? I`<span class="day">${this._t("sat")}</span><span>${n.from} – ${n.to}</span>` : z}
-        ${r ? I`<span class="day">${this._t("sun")}</span><span>${r.from} – ${r.to}</span>` : z}
-        ${i ? I`<span class="day">${this._t("holiday")}</span><span>${i.from} – ${i.to}</span>` : z}
+        ${t ? I`<span class="day">${this._t("mon_fri")}</span><span>${t.from} – ${t.to}</span>` : R}
+        ${n ? I`<span class="day">${this._t("sat")}</span><span>${n.from} – ${n.to}</span>` : R}
+        ${r ? I`<span class="day">${this._t("sun")}</span><span>${r.from} – ${r.to}</span>` : R}
+        ${i ? I`<span class="day">${this._t("holiday")}</span><span>${i.from} – ${i.to}</span>` : R}
       </div>
     `;
 	}
 	_renderPaymentMethods(e) {
-		if (!e) return z;
+		if (!e) return R;
 		let t = [];
 		e.cash && t.push(I`
         <span class="pm-badge">
@@ -3954,7 +3945,7 @@ var Qt = @De("tankstellen-austria-card") class extends H {
         <div class="pm-label">${this._t("payment")}</div>
         <div class="pm-badges">${t}</div>
       </div>
-    ` : z;
+    ` : R;
 	}
 	_onTabClick(e) {
 		this._activeTab !== e && (this._activeTab = e, this._expandedStations = /* @__PURE__ */ new Set());
@@ -4019,12 +4010,14 @@ var Qt = @De("tankstellen-austria-card") class extends H {
 			}
 		}, 3e3), this._cooldownInterval !== void 0 && clearInterval(this._cooldownInterval), typeof window < "u" && typeof window.matchMedia == "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? (this._cooldownTimeout !== void 0 && clearTimeout(this._cooldownTimeout), this._cooldownTimeout = window.setTimeout(() => {
 			this._cooldownTimeout = void 0, this._cooldownTick = (this._cooldownTick + 1) % 1e6;
-		}, Pe)) : this._cooldownInterval = window.setInterval(() => {
+		}, Fe)) : this._cooldownInterval = window.setInterval(() => {
 			Date.now() - this._lastManualRefresh >= 12e4 && this._cooldownInterval !== void 0 && (clearInterval(this._cooldownInterval), this._cooldownInterval = void 0), this._cooldownTick = (this._cooldownTick + 1) % 1e6;
 		}, 1e3);
 	}
-	_onVersionReload = async () => {};
-	static styles = Ht;
+	static {
+		this.styles = Wt;
+	}
 };
+Z([je({ attribute: !1 })], $.prototype, "hass", void 0), Z([H()], $.prototype, "_config", void 0), Z([H()], $.prototype, "_activeTab", void 0), Z([H()], $.prototype, "_expandedStations", void 0), Z([H()], $.prototype, "_history", void 0), Z([H()], $.prototype, "_versionMismatch", void 0), Z([H()], $.prototype, "_lastManualRefresh", void 0), Z([H()], $.prototype, "_noNewData", void 0), Z([H()], $.prototype, "_historyError", void 0), Z([H()], $.prototype, "_cooldownTick", void 0), $ = Z([Oe("tankstellen-austria-card")], $);
 //#endregion
-export { Qt as TankstellenAustriaCard };
+export { $ as TankstellenAustriaCard };
