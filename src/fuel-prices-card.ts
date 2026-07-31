@@ -18,6 +18,9 @@ import { classMap } from "lit/directives/class-map.js";
 
 import type {
   CarConfig,
+  FuelEntity,
+  FuelEntityAttributes,
+  FuelPricesCardConfig,
   FuelType,
   HomeAssistant,
   LovelaceCardEditor,
@@ -70,10 +73,6 @@ import {
 // element, avoiding a race where HA creates an unregistered element.
 import "./editor";
 
-// E-Control attribution string (§3 attribution practice). Hard-coded as a
-// fallback so the footer stays correct even when a user-built template
-// sensor strips the upstream `attribution` attribute. Mirrors the
-// Ladestellen Austria card.
 const ATTRIBUTION_REQUIRED = "Datenquelle: E-Control";
 
 interface WindowWithCustomCards extends Window {
@@ -83,9 +82,6 @@ interface WindowWithCustomCards extends Window {
     description: string;
     preview?: boolean;
     documentationURL?: string;
-    // Opt into the 2026.6 entity-first card picker. Additive key older HA
-    // ignores; returns a one-entity stub for this integration's own sensors
-    // (the user can extend `entities` afterwards).
     getEntitySuggestion?: (
       hass: HomeAssistant,
       entityId: string,
@@ -96,26 +92,13 @@ interface WindowWithCustomCards extends Window {
 (window as unknown as WindowWithCustomCards).customCards =
   (window as unknown as WindowWithCustomCards).customCards || [];
 (window as unknown as WindowWithCustomCards).customCards.push({
-  type: "tankstellen-austria-card",
-  name: "Fuel prices Card",
+  type: "fuel-prices-card",
+  name: "Fuel Prices Card",
   description:
     "Fuel price sensors with sparklines, best-refuel analytics, and car cost calculations.",
   preview: true,
-  documentationURL: "https://github.com/rolandzeiner/tankstellen-austria",
+  documentationURL: "https://github.com/rolandzeiner/ha-fuel-prices-card",
 });
-
-type FuelEntityAttributes = Record<string, unknown> & {
-  friendly_name?: string;
-  station_name?: string;
-  device?: string;
-  brand?: string;
-  street?: string;
-  house_number?: string | number;
-  postcode?: string | number;
-  city?: string;
-  fuel_type?: string;
-  fuel_type_name?: string;
-};
 
 function normaliseFuelType(raw: string | undefined): FuelType | string {
   const value = raw?.trim().toLowerCase();
@@ -138,6 +121,26 @@ function normaliseFuelType(raw: string | undefined): FuelType | string {
   }
 }
 
+function detectEntityFuelType(entity: FuelEntity): FuelType | "" {
+  const attrs = entity.attributes as FuelEntityAttributes;
+  const rawFuel = attrs.fuel_type || attrs.fuel_type_name;
+  if (rawFuel) {
+    const norm = normaliseFuelType(String(rawFuel));
+    if (norm === "DIE" || norm === "SUP" || norm === "GAS") return norm;
+  }
+  const searchStr = `${entity.entity_id} ${attrs.friendly_name ?? ""} ${attrs.station_name ?? ""}`.toLowerCase();
+  if (/\b(diesel|die)\b/i.test(searchStr) || searchStr.includes("diesel")) {
+    return "DIE";
+  }
+  if (/\b(super|sup|e5|e10|95|benzin)\b/i.test(searchStr) || searchStr.includes("super") || searchStr.includes("benzin")) {
+    return "SUP";
+  }
+  if (/\b(cng|gas|lpg|autogas)\b/i.test(searchStr) || searchStr.includes("cng") || searchStr.includes("gas")) {
+    return "GAS";
+  }
+  return "";
+}
+
 function firstString(...values: Array<unknown>): string | undefined {
   for (const value of values) {
     if (typeof value === "string" && value.trim().length > 0) {
@@ -155,11 +158,11 @@ function formatLocation(attrs: FuelEntityAttributes): string | undefined {
   return location.length ? location.join(" ") : undefined;
 }
 
-@customElement("tankstellen-austria-card")
-export class TankstellenAustriaCard extends LitElement {
+@customElement("fuel-prices-card")
+export class FuelPricesCard extends LitElement {
   public static getConfigElement(): LovelaceCardEditor {
     return document.createElement(
-      "tankstellen-austria-card-editor",
+      "fuel-prices-card-editor",
     ) as LovelaceCardEditor;
   }
 
@@ -184,7 +187,7 @@ export class TankstellenAustriaCard extends LitElement {
 
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @state() private _config!: TankstellenAustriaCardConfig;
+  @state() private _config!: FuelPricesCardConfig;
   @state() private _activeTab = 0;
   @state() private _expandedStations: Set<string> = new Set();
   @state() private _history: Record<string, HistoryPoint[]> = {};
@@ -192,35 +195,24 @@ export class TankstellenAustriaCard extends LitElement {
   @state() private _lastManualRefresh = 0;
   @state() private _noNewData = false;
   @state() private _historyError = false;
-  // Incremented by the cooldown interval so the countdown re-renders each
-  // second while a refresh is on cooldown. Reactive, but never read —
-  // shouldUpdate gates on it via `changed.has("_cooldownTick")`.
   @state() private _cooldownTick = 0;
 
   // Non-reactive instance fields.
   private _initDone = false;
   private _historyInterval: number | undefined;
   private _cooldownInterval: number | undefined;
-  // Manual-refresh post-fetch check (3s after the update_entity calls) and
-  // the reduce-motion cooldown wake-up are one-shot setTimeouts. Stored on
-  // the instance so disconnectedCallback can cancel them — otherwise a
-  // dashboard edit-mode flip leaves a pending callback that fires against
-  // a detached element and writes to a now-unobserved reactive prop.
   private _postRefreshTimeout: number | undefined;
   private _cooldownTimeout: number | undefined;
   private _sparklineCleanup: (() => void) | undefined;
 
-  public setConfig(config: TankstellenAustriaCardConfig): void {
+  public setConfig(config: FuelPricesCardConfig): void {
     if (!config || typeof config !== "object" || Array.isArray(config)) {
-      throw new Error("tankstellen-austria-card: config must be an object");
+      throw new Error("fuel-prices-card: config must be an object");
     }
-    // entities is optional (auto-discovery fallback), but if provided it
-    // must be a string or string[] — silently dropping a typo'd shape
-    // hides the misconfiguration behind the empty-state.
     const ent = (config as Record<string, unknown>).entities;
     if (ent !== undefined && typeof ent !== "string" && !Array.isArray(ent)) {
       throw new Error(
-        "tankstellen-austria-card: config.entities must be a string or array of entity IDs",
+        "fuel-prices-card: config.entities must be a string or array of entity IDs",
       );
     }
     this._config = normaliseConfig(config);
@@ -376,7 +368,7 @@ export class TankstellenAustriaCard extends LitElement {
       this._historyError = false;
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn("[Tankstellen Austria] history refresh failed", err);
+      console.warn("[Fuel Prices] history refresh failed", err);
       this._historyError = true;
     }
   }
@@ -754,22 +746,24 @@ export class TankstellenAustriaCard extends LitElement {
     `;
   }
 
-  private _renderCars(active: TankstellenEntity): TemplateResult | typeof nothing {
+  private _renderCars(active: FuelEntity): TemplateResult | typeof nothing {
     const showCars = this._config.show_cars === true;
     const showCarFillup = this._config.show_car_fillup !== false;
     const showCarConsumption = this._config.show_car_consumption !== false;
     if (!showCars || (!showCarFillup && !showCarConsumption)) return nothing;
 
-    const fuelType = normaliseFuelType(
-      (active.attributes as FuelEntityAttributes).fuel_type,
-    );
+    const detectedFuelType = detectEntityFuelType(active);
     const price = this._entityPrice(active);
     if (price == null) return nothing;
 
-    // Cars must match the *active* fuel type. Backed by the full config list.
-    const rawCars: CarConfig[] = (this._config.cars ?? []).filter(
-      (c) => normaliseFuelType(c.fuel_type) === fuelType && c.tank_size > 0 && c.name,
-    );
+    const rawCars: CarConfig[] = (this._config.cars ?? []).filter((c) => {
+      if (c.tank_size <= 0) return false;
+      const carFuelType = normaliseFuelType(c.fuel_type);
+      if (detectedFuelType !== "" && carFuelType !== detectedFuelType) {
+        return false;
+      }
+      return true;
+    });
     const cars = showCarFillup
       ? rawCars
       : rawCars.filter((c) => Number(c.consumption) > 0);
@@ -795,6 +789,7 @@ export class TankstellenAustriaCard extends LitElement {
       Number.isFinite(consumption) && consumption > 0
         ? consumption.toFixed(1).replace(".", ",")
         : "";
+    const carName = car.name || "Auto";
 
     if (showCarFillup) {
       const costStr =
@@ -809,7 +804,7 @@ export class TankstellenAustriaCard extends LitElement {
         <div class="car-fillup-row">
           <span class="car-fillup-name">
             <ha-icon icon=${car.icon || "mdi:car"} class="car-icon" aria-hidden="true"></ha-icon>
-            ${car.name}
+            ${carName}
             <span class="car-fillup-liters">${car.tank_size} L</span>
           </span>
           <span class="car-fillup-cost">${costStr}</span>
@@ -1253,7 +1248,7 @@ export class TankstellenAustriaCard extends LitElement {
         (p as Promise<void>).catch((err) => {
           // eslint-disable-next-line no-console
           console.warn(
-            "[Tankstellen Austria] update_entity failed for",
+            "[Fuel Prices] update_entity failed for",
             e.entity_id,
             err,
           );
@@ -1275,7 +1270,7 @@ export class TankstellenAustriaCard extends LitElement {
         }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn("[Tankstellen Austria] post-refresh check failed", err);
+        console.warn("[Fuel Prices] post-refresh check failed", err);
       }
     }, 3000);
 
@@ -1313,4 +1308,13 @@ export class TankstellenAustriaCard extends LitElement {
   private _onVersionReload = async (): Promise<void> => {};
 
   static override styles: CSSResultGroup = cardStyles;
+}
+
+export { FuelPricesCard as TankstellenAustriaCard };
+
+if (!customElements.get("tankstellen-austria-card")) {
+  customElements.define(
+    "tankstellen-austria-card",
+    class extends FuelPricesCard {},
+  );
 }

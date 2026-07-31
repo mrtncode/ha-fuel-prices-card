@@ -71,7 +71,7 @@ export async function fetchHistory(
       // Don't poison the cache on transient fetch failure — next call retries.
       // eslint-disable-next-line no-console
       console.warn(
-        "[Tankstellen Austria] history fetch failed for",
+        "[Fuel Prices] history fetch failed for",
         entityId,
         "— sparkline and best-refuel will be empty:",
         err,

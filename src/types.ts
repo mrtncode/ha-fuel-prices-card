@@ -81,12 +81,20 @@ export function fireEvent<T>(
   );
 }
 
-// Register your editor element + the built-in error card with the global
-// HTMLElementTagNameMap so TypeScript autocompletes them in templates.
+interface HaEntityPickerElement extends HTMLElement {
+  hass?: HomeAssistant;
+  value?: string;
+  label?: string;
+  includeDomains?: string[];
+  allowCustomEntity?: boolean;
+}
+
 declare global {
   interface HTMLElementTagNameMap {
+    "fuel-prices-card-editor": LovelaceCardEditor;
     "tankstellen-austria-card-editor": LovelaceCardEditor;
     "hui-error-card": LovelaceCard;
+    "ha-entity-picker": HaEntityPickerElement;
   }
 }
 
@@ -100,7 +108,7 @@ export interface CarConfig {
   icon?: string; // mdi:*
 }
 
-export interface TankstellenAustriaCardConfig extends LovelaceCardConfig {
+export interface FuelPricesCardConfig extends LovelaceCardConfig {
   type: string;
   name?: string;
   entities?: string[];
@@ -111,15 +119,8 @@ export interface TankstellenAustriaCardConfig extends LovelaceCardConfig {
 
   show_index?: boolean;
   show_map_links?: boolean;
-  // Where the navigation link opens. "auto" (also the absent-key default)
-  // routes per device: Apple Maps on iOS, geo: chooser on Android, Google
-  // Maps on desktop. "google" / "apple" force that provider everywhere
-  // (Apple Maps falls back to its web app on non-Apple devices).
   map_provider?: "auto" | "google" | "apple";
   show_distance?: boolean;
-  // Order the station list by `distance_m` (nearest first) instead of the
-  // integration's cheapest-first order. Independent of `show_distance` —
-  // sorting works even when the caption is hidden. Defaults to false.
   sort_by_distance?: boolean;
   show_opening_hours?: boolean;
   show_payment_methods?: boolean;
@@ -140,27 +141,13 @@ export interface TankstellenAustriaCardConfig extends LovelaceCardConfig {
   show_car_consumption?: boolean;
   cars?: CarConfig[];
 
-  // Hide the hero metric block (cheapest + "/ avg" + UPPERCASE label)
-  // from the header strip. Defaults to false: the hero is visible.
-  // Useful when stations list is the focus and the prices below are
-  // sufficient.
   hide_header_price?: boolean;
-
-  // Brand-coloured E-Control logo by default. When true, the logo
-  // renders as a theme-adaptive silhouette (black on light themes,
-  // white on dark themes) — same vocabulary as the Ladestellen card.
   logo_adapt_to_theme?: boolean;
-
-  // Hide the card header (icon-tile + station name + subtitle +
-  // refresh / icon-action cluster). Defaults to false: the header
-  // is visible by default. Useful for stripped-down dashboards.
   hide_header?: boolean;
-
-  // Hide the attribution footer (logo + "Datenquelle: E-Control"
-  // line). Defaults to false: the footer is visible by default,
-  // matching E-Control §3 attribution practice.
   hide_attribution?: boolean;
 }
+
+export type TankstellenAustriaCardConfig = FuelPricesCardConfig;
 
 // --- Upstream API shapes, as surfaced on the HA sensor's `.attributes`. ---
 
@@ -190,33 +177,32 @@ export interface Station {
   price?: number;
   open?: boolean;
   location?: StationLocation;
-  // As-the-crow-flies distance (metres) from the reference point, stamped by
-  // the coordinator. Absent when the station has no usable coordinates.
   distance_m?: number;
   opening_hours?: OpeningHours[];
   payment_methods?: PaymentMethods;
 }
 
-export interface TankstellenEntityAttributes {
+export interface FuelEntityAttributes {
   friendly_name?: string;
   fuel_type?: FuelType | string;
   fuel_type_name?: string;
   stations?: Station[];
   average_price?: number;
   dynamic_mode?: boolean;
-  // User-chosen friendly_name of the bound device_tracker (NOT its
-  // entity_id — the integration scrubs the entity_id for privacy).
-  // Used for the dynamic-mode tab subtitle and header chip.
   dynamic_tracker_label?: string;
   attribution?: string;
 }
 
-export interface TankstellenEntity {
+export type TankstellenEntityAttributes = FuelEntityAttributes;
+
+export interface FuelEntity {
   entity_id: string;
   state: string;
-  attributes: TankstellenEntityAttributes;
+  attributes: FuelEntityAttributes;
   last_updated?: string;
 }
+
+export type TankstellenEntity = FuelEntity;
 
 // ---------------------------------------------------------------------------
 // <ha-form> schema types

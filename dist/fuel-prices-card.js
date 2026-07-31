@@ -646,9 +646,9 @@ function ze(e) {
 	return o != null && (s.consumption = o), s;
 }
 function Be(e) {
-	if (!e) throw Error("tankstellen-austria-card: config missing");
+	if (!e) throw Error("fuel-prices-card: config missing");
 	let t = { ...e };
-	if (typeof t.entities == "string" && (t.entities = [t.entities]), Array.isArray(t.entities) ? t.entities = t.entities.filter((e) => typeof e == "string" && e.includes(".")) : t.entities != null && (console.warn("[Tankstellen Austria] config.entities must be an array of entity IDs — ignoring", t.entities), delete t.entities), t.max_stations != null) {
+	if (typeof t.entities == "string" && (t.entities = [t.entities]), Array.isArray(t.entities) ? t.entities = t.entities.filter((e) => typeof e == "string" && e.includes(".")) : t.entities != null && (console.warn("[Fuel Prices] config.entities must be an array of entity IDs — ignoring", t.entities), delete t.entities), t.max_stations != null) {
 		let e = parseInt(String(t.max_stations), 10);
 		t.max_stations = Number.isFinite(e) ? Math.max(0, Math.min(5, e)) : 5;
 	}
@@ -1062,7 +1062,7 @@ async function yt(e, t, n = {}) {
 			})).filter((e) => Number.isFinite(e.value) && e.time > 0);
 			return gt.set(t, n), n;
 		} catch (e) {
-			return console.warn("[Tankstellen Austria] history fetch failed for", t, "— sparkline and best-refuel will be empty:", e), gt.get(t) ?? [];
+			return console.warn("[Fuel Prices] history fetch failed for", t, "— sparkline and best-refuel will be empty:", e), gt.get(t) ?? [];
 		} finally {
 			_t.delete(t);
 		}
@@ -1323,7 +1323,7 @@ function kt(e) {
 			viewBoxHeight: X
 		};
 	} catch (e) {
-		return console.warn("[Tankstellen Austria] sparkline render failed:", e), t;
+		return console.warn("[Fuel Prices] sparkline render failed:", e), t;
 	}
 }
 function At(e, t) {
@@ -1376,7 +1376,7 @@ function At(e, t) {
 			a.abort();
 		};
 	} catch (e) {
-		return console.warn("[Tankstellen Austria] sparkline hover setup failed:", e), n;
+		return console.warn("[Fuel Prices] sparkline hover setup failed:", e), n;
 	}
 }
 //#endregion
@@ -2790,7 +2790,7 @@ function Zt(e) {
 }
 var Q = class extends V {
 	constructor(...e) {
-		super(...e), this._config = { type: "tankstellen-austria-card" }, this._expandedCarIcon = null, this._pendingRemove = null, this._copiedPulse = !1, this._computeLabel = (e) => {
+		super(...e), this._config = { type: "fuel-prices-card" }, this._expandedCarIcon = null, this._pendingRemove = null, this._copiedPulse = !1, this._computeLabel = (e) => {
 			let t = `ui.panel.lovelace.editor.card.generic.${e.name}`, n = this.hass?.localize?.(t);
 			if (n) return n;
 			let r = this._et(e.name);
@@ -2825,7 +2825,12 @@ var Q = class extends V {
 		return pt(`card.${e}`, this._ctx(), t);
 	}
 	_fireChanged() {
-		Xt(this, "config-changed", { config: { ...this._config } });
+		let e = { ...this._config };
+		if (e.entities) {
+			let t = e.entities.map((e) => Zt(e)).filter(Boolean);
+			t.length ? e.entities = t : delete e.entities;
+		}
+		Xt(this, "config-changed", { config: e });
 	}
 	_entityLabel(e) {
 		let t = this.hass?.states[e];
@@ -2834,13 +2839,13 @@ var Q = class extends V {
 		return o && !r.toLowerCase().includes(o.toLowerCase()) ? `${r} · ${o}` : r;
 	}
 	_commitEntities(e) {
-		let t = e.map((e) => Zt(e)).filter(Boolean), n = { ...this._config };
-		t.length ? n.entities = t : delete n.entities, this._config = n, this._fireChanged();
+		let t = { ...this._config };
+		t.entities = e, this._config = t, this._fireChanged();
 	}
 	_onEntityChange(e, t) {
 		t.stopPropagation();
-		let n = t.target, r = Zt(n.value), i = [...this._config.entities ?? []];
-		r ? i[e] = r : i.splice(e, 1), this._commitEntities(i);
+		let n = t.target.value, r = [...this._config.entities ?? []];
+		r[e] = n, this._commitEntities(r);
 	}
 	_onAddEntity() {
 		let e = [...this._config.entities ?? []];
@@ -2964,6 +2969,7 @@ var Q = class extends V {
                 placeholder="sensor.bft_osdorfer_landstr_5_diesel"
                 .value=${e}
                 autocomplete="off"
+                @input=${(e) => this._onEntityChange(t, e)}
                 @change=${(e) => this._onEntityChange(t, e)}
                 @keydown=${this._stop}
                 @keyup=${this._stop}
@@ -3165,6 +3171,7 @@ var Q = class extends V {
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e) => this._onCarFieldChange(t, "name", e)}
             @change=${(e) => this._onCarFieldChange(t, "name", e)}
           />
           <select
@@ -3200,6 +3207,7 @@ var Q = class extends V {
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e) => this._onCarFieldChange(t, "tank_size", e)}
             @change=${(e) => this._onCarFieldChange(t, "tank_size", e)}
           />
           <input
@@ -3219,6 +3227,7 @@ var Q = class extends V {
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e) => this._onCarFieldChange(t, "consumption", e)}
             @change=${(e) => this._onCarFieldChange(t, "consumption", e)}
           />
           <button
@@ -3360,7 +3369,7 @@ var Q = class extends V {
 		e.stopPropagation();
 		let t = [...this._config.cars ?? []];
 		t.push({
-			name: "",
+			name: `Auto ${t.length + 1}`,
 			fuel_type: "DIE",
 			tank_size: 50,
 			icon: "mdi:car"
@@ -3373,12 +3382,12 @@ var Q = class extends V {
 		this.styles = Gt;
 	}
 };
-Z([je({ attribute: !1 })], Q.prototype, "hass", void 0), Z([H()], Q.prototype, "_config", void 0), Z([H()], Q.prototype, "_expandedCarIcon", void 0), Z([H()], Q.prototype, "_pendingRemove", void 0), Z([H()], Q.prototype, "_copiedPulse", void 0), Q = Z([Oe("tankstellen-austria-card-editor")], Q), window.customCards = window.customCards || [], window.customCards.push({
-	type: "tankstellen-austria-card",
-	name: "Fuel prices Card",
+Z([je({ attribute: !1 })], Q.prototype, "hass", void 0), Z([H()], Q.prototype, "_config", void 0), Z([H()], Q.prototype, "_expandedCarIcon", void 0), Z([H()], Q.prototype, "_pendingRemove", void 0), Z([H()], Q.prototype, "_copiedPulse", void 0), Q = Z([Oe("fuel-prices-card-editor")], Q), customElements.get("tankstellen-austria-card-editor") || customElements.define("tankstellen-austria-card-editor", class extends Q {}), window.customCards = window.customCards || [], window.customCards.push({
+	type: "fuel-prices-card",
+	name: "Fuel Prices Card",
 	description: "Fuel price sensors with sparklines, best-refuel analytics, and car cost calculations.",
 	preview: !0,
-	documentationURL: "https://github.com/rolandzeiner/tankstellen-austria"
+	documentationURL: "https://github.com/rolandzeiner/ha-fuel-prices-card"
 });
 function Qt(e) {
 	switch (e?.trim().toLowerCase()) {
@@ -3395,10 +3404,19 @@ function Qt(e) {
 		default: return e ?? "";
 	}
 }
-function $t(...e) {
+function $t(e) {
+	let t = e.attributes, n = t.fuel_type || t.fuel_type_name;
+	if (n) {
+		let e = Qt(String(n));
+		if (e === "DIE" || e === "SUP" || e === "GAS") return e;
+	}
+	let r = `${e.entity_id} ${t.friendly_name ?? ""} ${t.station_name ?? ""}`.toLowerCase();
+	return /\b(diesel|die)\b/i.test(r) || r.includes("diesel") ? "DIE" : /\b(super|sup|e5|e10|95|benzin)\b/i.test(r) || r.includes("super") || r.includes("benzin") ? "SUP" : /\b(cng|gas|lpg|autogas)\b/i.test(r) || r.includes("cng") || r.includes("gas") ? "GAS" : "";
+}
+function en(...e) {
 	for (let t of e) if (typeof t == "string" && t.trim().length > 0) return t.trim();
 }
-function en(e) {
+function tn(e) {
 	let t = [
 		e.street,
 		e.house_number,
@@ -3412,7 +3430,7 @@ var $ = class extends V {
 		super(...e), this._activeTab = 0, this._expandedStations = /* @__PURE__ */ new Set(), this._history = {}, this._versionMismatch = null, this._lastManualRefresh = 0, this._noNewData = !1, this._historyError = !1, this._cooldownTick = 0, this._initDone = !1, this._onDismissVersionBanner = () => {}, this._onVersionReload = async () => {};
 	}
 	static getConfigElement() {
-		return document.createElement("tankstellen-austria-card-editor");
+		return document.createElement("fuel-prices-card-editor");
 	}
 	static getStubConfig(e) {
 		return {
@@ -3433,9 +3451,9 @@ var $ = class extends V {
 		};
 	}
 	setConfig(e) {
-		if (!e || typeof e != "object" || Array.isArray(e)) throw Error("tankstellen-austria-card: config must be an object");
+		if (!e || typeof e != "object" || Array.isArray(e)) throw Error("fuel-prices-card: config must be an object");
 		let t = e.entities;
-		if (t !== void 0 && typeof t != "string" && !Array.isArray(t)) throw Error("tankstellen-austria-card: config.entities must be a string or array of entity IDs");
+		if (t !== void 0 && typeof t != "string" && !Array.isArray(t)) throw Error("fuel-prices-card: config.entities must be a string or array of entity IDs");
 		if (this._config = Be(e), this._config.entities) {
 			let e = {}, t = !1;
 			for (let n of this._config.entities) {
@@ -3507,7 +3525,7 @@ var $ = class extends V {
 				};
 			})), this._historyError = !1;
 		} catch (e) {
-			console.warn("[Tankstellen Austria] history refresh failed", e), this._historyError = !0;
+			console.warn("[Fuel Prices] history refresh failed", e), this._historyError = !0;
 		}
 	}
 	async _checkCardVersion() {}
@@ -3591,10 +3609,10 @@ var $ = class extends V {
 	}
 	_entityLabel(e) {
 		let t = e.attributes;
-		return $t(t.station_name, t.device, t.friendly_name, e.entity_id) ?? e.entity_id;
+		return en(t.station_name, t.device, t.friendly_name, e.entity_id) ?? e.entity_id;
 	}
 	_entitySubtitle(e) {
-		let t = e.attributes, n = Qt(t.fuel_type), r = [typeof t.fuel_type_name == "string" && t.fuel_type_name.trim() ? t.fuel_type_name.trim() : ht(n, this._ctx()), en(t)].filter((e) => typeof e == "string" && e.length > 0);
+		let t = e.attributes, n = Qt(t.fuel_type), r = [typeof t.fuel_type_name == "string" && t.fuel_type_name.trim() ? t.fuel_type_name.trim() : ht(n, this._ctx()), tn(t)].filter((e) => typeof e == "string" && e.length > 0);
 		return r.length ? r.join(" · ") : void 0;
 	}
 	_entityPrice(e) {
@@ -3760,9 +3778,13 @@ var $ = class extends V {
 	_renderCars(e) {
 		let t = this._config.show_cars === !0, n = this._config.show_car_fillup !== !1, r = this._config.show_car_consumption !== !1;
 		if (!t || !n && !r) return R;
-		let i = Qt(e.attributes.fuel_type), a = this._entityPrice(e);
+		let i = $t(e), a = this._entityPrice(e);
 		if (a == null) return R;
-		let o = (this._config.cars ?? []).filter((e) => Qt(e.fuel_type) === i && e.tank_size > 0 && e.name), s = n ? o : o.filter((e) => Number(e.consumption) > 0);
+		let o = (this._config.cars ?? []).filter((e) => {
+			if (e.tank_size <= 0) return !1;
+			let t = Qt(e.fuel_type);
+			return !(i !== "" && t !== i);
+		}), s = n ? o : o.filter((e) => Number(e.consumption) > 0);
 		return s.length ? I`
       <div class="cars-fillup">
         ${s.map((e) => this._renderCarRow(e, a, n, r))}
@@ -3770,14 +3792,14 @@ var $ = class extends V {
     ` : R;
 	}
 	_renderCarRow(e, t, n, r) {
-		let i = Number(e.consumption), a = Number.isFinite(i) && i > 0 ? i.toFixed(1).replace(".", ",") : "";
+		let i = Number(e.consumption), a = Number.isFinite(i) && i > 0 ? i.toFixed(1).replace(".", ",") : "", o = e.name || "Auto";
 		if (n) {
-			let n = t == null ? "–" : `€ ${(t * Number(e.tank_size)).toFixed(2).replace(".", ",")}`, o = t != null && i > 0 ? `€ ${(t * i).toFixed(2).replace(".", ",")}` : "–";
+			let n = t == null ? "–" : `€ ${(t * Number(e.tank_size)).toFixed(2).replace(".", ",")}`, s = t != null && i > 0 ? `€ ${(t * i).toFixed(2).replace(".", ",")}` : "–";
 			return I`
         <div class="car-fillup-row">
           <span class="car-fillup-name">
             <ha-icon icon=${e.icon || "mdi:car"} class="car-icon" aria-hidden="true"></ha-icon>
-            ${e.name}
+            ${o}
             <span class="car-fillup-liters">${e.tank_size} L</span>
           </span>
           <span class="car-fillup-cost">${n}</span>
@@ -3785,12 +3807,12 @@ var $ = class extends V {
         ${r && i > 0 ? I`
               <div class="car-per100-row">
                 <span class="car-per100-label">${a} l/100 km</span>
-                <span class="car-per100-cost">${o} / 100 km</span>
+                <span class="car-per100-cost">${s} / 100 km</span>
               </div>
             ` : R}
       `;
 		}
-		let o = t == null ? "–" : `€ ${(t * i).toFixed(2).replace(".", ",")}`;
+		let s = t == null ? "–" : `€ ${(t * i).toFixed(2).replace(".", ",")}`;
 		return I`
       <div class="car-fillup-row">
         <span class="car-fillup-name">
@@ -3798,7 +3820,7 @@ var $ = class extends V {
           ${e.name}
           <span class="car-fillup-liters">${a} l/100 km</span>
         </span>
-        <span class="car-fillup-cost">${o} / 100 km</span>
+        <span class="car-fillup-cost">${s} / 100 km</span>
       </div>
     `;
 	}
@@ -3997,7 +4019,7 @@ var $ = class extends V {
 		for (let e of t) {
 			let t = this.hass.callService("homeassistant", "update_entity", { entity_id: e.entity_id });
 			t && typeof t.catch == "function" && t.catch((t) => {
-				console.warn("[Tankstellen Austria] update_entity failed for", e.entity_id, t);
+				console.warn("[Fuel Prices] update_entity failed for", e.entity_id, t);
 			});
 		}
 		this._postRefreshTimeout !== void 0 && clearTimeout(this._postRefreshTimeout), this._postRefreshTimeout = window.setTimeout(() => {
@@ -4006,7 +4028,7 @@ var $ = class extends V {
 				let e = this._resolveEntities();
 				(e[this._activeTab] ?? e[0])?.last_updated === n && (this._noNewData = !0);
 			} catch (e) {
-				console.warn("[Tankstellen Austria] post-refresh check failed", e);
+				console.warn("[Fuel Prices] post-refresh check failed", e);
 			}
 		}, 3e3), this._cooldownInterval !== void 0 && clearInterval(this._cooldownInterval), typeof window < "u" && typeof window.matchMedia == "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? (this._cooldownTimeout !== void 0 && clearTimeout(this._cooldownTimeout), this._cooldownTimeout = window.setTimeout(() => {
 			this._cooldownTimeout = void 0, this._cooldownTick = (this._cooldownTick + 1) % 1e6;
@@ -4018,6 +4040,6 @@ var $ = class extends V {
 		this.styles = Wt;
 	}
 };
-Z([je({ attribute: !1 })], $.prototype, "hass", void 0), Z([H()], $.prototype, "_config", void 0), Z([H()], $.prototype, "_activeTab", void 0), Z([H()], $.prototype, "_expandedStations", void 0), Z([H()], $.prototype, "_history", void 0), Z([H()], $.prototype, "_versionMismatch", void 0), Z([H()], $.prototype, "_lastManualRefresh", void 0), Z([H()], $.prototype, "_noNewData", void 0), Z([H()], $.prototype, "_historyError", void 0), Z([H()], $.prototype, "_cooldownTick", void 0), $ = Z([Oe("tankstellen-austria-card")], $);
+Z([je({ attribute: !1 })], $.prototype, "hass", void 0), Z([H()], $.prototype, "_config", void 0), Z([H()], $.prototype, "_activeTab", void 0), Z([H()], $.prototype, "_expandedStations", void 0), Z([H()], $.prototype, "_history", void 0), Z([H()], $.prototype, "_versionMismatch", void 0), Z([H()], $.prototype, "_lastManualRefresh", void 0), Z([H()], $.prototype, "_noNewData", void 0), Z([H()], $.prototype, "_historyError", void 0), Z([H()], $.prototype, "_cooldownTick", void 0), $ = Z([Oe("fuel-prices-card")], $), customElements.get("tankstellen-austria-card") || customElements.define("tankstellen-austria-card", class extends $ {});
 //#endregion
-export { $ as TankstellenAustriaCard };
+export { $ as FuelPricesCard, $ as TankstellenAustriaCard };

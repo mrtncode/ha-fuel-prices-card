@@ -35,12 +35,12 @@ function normaliseCar(raw: unknown): CarConfig | null {
 // weirdly. Normalise in place instead of throwing — the card stays usable even
 // with partially-broken config.
 export function normaliseConfig(
-  input: TankstellenAustriaCardConfig,
-): TankstellenAustriaCardConfig {
+  input: FuelPricesCardConfig,
+): FuelPricesCardConfig {
   if (!input) {
-    throw new Error("tankstellen-austria-card: config missing");
+    throw new Error("fuel-prices-card: config missing");
   }
-  const cfg: TankstellenAustriaCardConfig = { ...input };
+  const cfg: FuelPricesCardConfig = { ...input };
 
   // entities: accept a single string as a one-item array; drop non-entity items.
   if (typeof cfg.entities === "string") {
@@ -53,7 +53,7 @@ export function normaliseConfig(
   } else if (cfg.entities != null) {
     // eslint-disable-next-line no-console
     console.warn(
-      "[Tankstellen Austria] config.entities must be an array of entity IDs — ignoring",
+      "[Fuel Prices] config.entities must be an array of entity IDs — ignoring",
       cfg.entities,
     );
     delete cfg.entities;

@@ -426,7 +426,7 @@ export function buildSparkline(opts: SparklineOpts): SparklineResult {
     };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn("[Tankstellen Austria] sparkline render failed:", err);
+    console.warn("[Fuel Prices] sparkline render failed:", err);
     return empty;
   }
 }
@@ -558,7 +558,7 @@ export function attachSparklineHover(
     };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn("[Tankstellen Austria] sparkline hover setup failed:", err);
+    console.warn("[Fuel Prices] sparkline hover setup failed:", err);
     return noop;
   }
 }

@@ -43,6 +43,7 @@ import { classMap } from "lit/directives/class-map.js";
 import {
   fireEvent,
   type CarConfig,
+  type FuelPricesCardConfig,
   type FuelType,
   type HaFormSchema,
   type HomeAssistant,
@@ -63,19 +64,15 @@ function sanitizeShort(raw: string): string {
   return raw.replace(/[<>"'&]/g, "").slice(0, 50).trim();
 }
 
-@customElement("tankstellen-austria-card-editor")
-export class TankstellenAustriaCardEditor
+@customElement("fuel-prices-card-editor")
+export class FuelPricesCardEditor
   extends LitElement
   implements LovelaceCardEditor
 {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  // IMPORTANT: initialize with a minimal valid config so the form always
-  // renders even before setConfig fires. A bare `_config?: Config` can leave
-  // the editor stuck on "Loading…" forever if HA's Lovelace panel is still
-  // finishing init.
-  @state() private _config: TankstellenAustriaCardConfig = {
-    type: "tankstellen-austria-card",
+  @state() private _config: FuelPricesCardConfig = {
+    type: "fuel-prices-card",
   };
 
   // Which car row has the icon picker expanded (index into cars[]).
@@ -89,7 +86,7 @@ export class TankstellenAustriaCardEditor
   @state() private _copiedPulse = false;
   private _copiedTimeout: number | undefined;
 
-  public setConfig(config: TankstellenAustriaCardConfig): void {
+  public setConfig(config: FuelPricesCardConfig): void {
     this._config = { ...config };
   }
 
@@ -118,7 +115,15 @@ export class TankstellenAustriaCardEditor
 
   // fireEvent sets bubbles + composed for us (crosses the shadow boundary).
   private _fireChanged(): void {
-    fireEvent(this, "config-changed", { config: { ...this._config } });
+    const configToSend: FuelPricesCardConfig = { ...this._config };
+    if (configToSend.entities) {
+      const cleaned = configToSend.entities
+        .map((eid) => sanitizeShort(eid))
+        .filter(Boolean);
+      if (cleaned.length) configToSend.entities = cleaned;
+      else delete configToSend.entities;
+    }
+    fireEvent(this, "config-changed", { config: configToSend });
   }
 
   private _entityLabel(entityId: string): string {
@@ -139,22 +144,22 @@ export class TankstellenAustriaCardEditor
           : typeof attrs.friendly_name === "string" && attrs.friendly_name.trim()
             ? attrs.friendly_name.trim()
             : entityId;
-        const fuelType = typeof attrs.fuel_type === "string" ? attrs.fuel_type : undefined;
-        const fuelTypeLabel =
-          fuelType?.toLowerCase() === "diesel"
-            ? "DIE"
-            : fuelType?.toLowerCase() === "super" ||
-                fuelType?.toLowerCase() === "super95" ||
-                fuelType?.toLowerCase() === "e5" ||
-                fuelType?.toLowerCase() === "95"
-              ? "SUP"
-              : fuelType?.toLowerCase() === "cng" || fuelType?.toLowerCase() === "gas"
-                ? "GAS"
-                : fuelType;
+    const fuelType = typeof attrs.fuel_type === "string" ? attrs.fuel_type : undefined;
+    const fuelTypeLabel =
+      fuelType?.toLowerCase() === "diesel"
+        ? "DIE"
+        : fuelType?.toLowerCase() === "super" ||
+            fuelType?.toLowerCase() === "super95" ||
+            fuelType?.toLowerCase() === "e5" ||
+            fuelType?.toLowerCase() === "95"
+          ? "SUP"
+          : fuelType?.toLowerCase() === "cng" || fuelType?.toLowerCase() === "gas"
+            ? "GAS"
+            : fuelType;
     const fuelName =
       typeof attrs.fuel_type_name === "string" && attrs.fuel_type_name.trim()
         ? attrs.fuel_type_name.trim()
-            : getFuelName(fuelTypeLabel ?? entityId, this._ctx());
+        : getFuelName(fuelTypeLabel ?? entityId, this._ctx());
     if (fuelName && !base.toLowerCase().includes(fuelName.toLowerCase())) {
       return `${base} · ${fuelName}`;
     }
@@ -162,10 +167,8 @@ export class TankstellenAustriaCardEditor
   }
 
   private _commitEntities(entityIds: string[]): void {
-    const cleaned = entityIds.map((eid) => sanitizeShort(eid)).filter(Boolean);
-    const next: TankstellenAustriaCardConfig = { ...this._config };
-    if (cleaned.length) next.entities = cleaned;
-    else delete next.entities;
+    const next: FuelPricesCardConfig = { ...this._config };
+    next.entities = entityIds;
     this._config = next;
     this._fireChanged();
   }
@@ -173,13 +176,9 @@ export class TankstellenAustriaCardEditor
   private _onEntityChange(idx: number, e: Event): void {
     e.stopPropagation();
     const target = e.target as HTMLInputElement;
-    const value = sanitizeShort(target.value);
+    const value = target.value;
     const current = [...(this._config.entities ?? [])];
-    if (value) {
-      current[idx] = value;
-    } else {
-      current.splice(idx, 1);
-    }
+    current[idx] = value;
     this._commitEntities(current);
   }
 
@@ -301,9 +300,9 @@ export class TankstellenAustriaCardEditor
     const value = ev.detail.value;
     // Spread on top of existing config so bespoke-section keys
     // (tab_labels, payment_filter, cars) survive form-only changes.
-    const next: TankstellenAustriaCardConfig = {
+    const next: FuelPricesCardConfig = {
       ...this._config,
-      ...(value as Partial<TankstellenAustriaCardConfig>),
+      ...(value as Partial<FuelPricesCardConfig>),
     };
     // "auto" is the absent-key default (render() injects it so the
     // dropdown isn't empty) — don't let it leak into saved YAML.
@@ -387,6 +386,7 @@ export class TankstellenAustriaCardEditor
                 placeholder="sensor.bft_osdorfer_landstr_5_diesel"
                 .value=${entityId}
                 autocomplete="off"
+                @input=${(e: Event) => this._onEntityChange(idx, e)}
                 @change=${(e: Event) => this._onEntityChange(idx, e)}
                 @keydown=${this._stop}
                 @keyup=${this._stop}
@@ -644,6 +644,7 @@ export class TankstellenAustriaCardEditor
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e: Event) => this._onCarFieldChange(idx, "name", e)}
             @change=${(e: Event) => this._onCarFieldChange(idx, "name", e)}
           />
           <select
@@ -677,6 +678,7 @@ export class TankstellenAustriaCardEditor
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e: Event) => this._onCarFieldChange(idx, "tank_size", e)}
             @change=${(e: Event) => this._onCarFieldChange(idx, "tank_size", e)}
           />
           <input
@@ -696,6 +698,8 @@ export class TankstellenAustriaCardEditor
             @keydown=${this._stop}
             @keyup=${this._stop}
             @keypress=${this._stop}
+            @input=${(e: Event) =>
+              this._onCarFieldChange(idx, "consumption", e)}
             @change=${(e: Event) =>
               this._onCarFieldChange(idx, "consumption", e)}
           />
@@ -777,7 +781,7 @@ export class TankstellenAustriaCardEditor
     const labels: Record<string, string> = { ...(this._config.tab_labels ?? {}) };
     if (val) labels[eid] = val;
     else delete labels[eid];
-    const next: TankstellenAustriaCardConfig = { ...this._config };
+    const next: FuelPricesCardConfig = { ...this._config };
     if (Object.keys(labels).length) next.tab_labels = labels;
     else delete next.tab_labels;
     this._config = next;
@@ -921,10 +925,22 @@ export class TankstellenAustriaCardEditor
   private _onAddCar(e: Event): void {
     e.stopPropagation();
     const cars = [...(this._config.cars ?? [])];
-    cars.push({ name: "", fuel_type: "DIE", tank_size: 50, icon: "mdi:car" });
+    cars.push({
+      name: `Auto ${cars.length + 1}`,
+      fuel_type: "DIE",
+      tank_size: 50,
+      icon: "mdi:car",
+    });
     this._config = { ...this._config, cars };
     this._fireChanged();
   }
 
   static override styles: CSSResultGroup = editorStyles;
+}
+
+if (!customElements.get("tankstellen-austria-card-editor")) {
+  customElements.define(
+    "tankstellen-austria-card-editor",
+    class extends FuelPricesCardEditor {},
+  );
 }
