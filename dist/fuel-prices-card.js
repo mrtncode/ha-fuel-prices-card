@@ -2838,26 +2838,14 @@ var Q = class extends V {
 		let n = t.attributes, r = typeof n.station_name == "string" && n.station_name.trim() ? n.station_name.trim() : typeof n.device == "string" && n.device.trim() ? n.device.trim() : typeof n.friendly_name == "string" && n.friendly_name.trim() ? n.friendly_name.trim() : e, i = typeof n.fuel_type == "string" ? n.fuel_type : void 0, a = i?.toLowerCase() === "diesel" ? "DIE" : i?.toLowerCase() === "super" || i?.toLowerCase() === "super95" || i?.toLowerCase() === "e5" || i?.toLowerCase() === "95" ? "SUP" : i?.toLowerCase() === "cng" || i?.toLowerCase() === "gas" ? "GAS" : i, o = typeof n.fuel_type_name == "string" && n.fuel_type_name.trim() ? n.fuel_type_name.trim() : ht(a ?? e, this._ctx());
 		return o && !r.toLowerCase().includes(o.toLowerCase()) ? `${r} · ${o}` : r;
 	}
-	_commitEntities(e) {
-		let t = { ...this._config };
-		t.entities = e, this._config = t, this._fireChanged();
-	}
-	_onEntityChange(e, t) {
-		t.stopPropagation();
-		let n = t.target.value, r = [...this._config.entities ?? []];
-		r[e] = n, this._commitEntities(r);
-	}
-	_onAddEntity() {
-		let e = [...this._config.entities ?? []];
-		e.push(""), this._commitEntities(e);
-	}
-	_onDeleteEntity(e, t) {
-		e.stopPropagation();
-		let n = [...this._config.entities ?? []];
-		n.splice(t, 1), this._commitEntities(n);
-	}
 	_schema() {
 		let e = this._config.show_history !== !1, t = this._config.show_cars === !0, n = [{
+			name: "entities",
+			selector: { entity: {
+				multiple: !0,
+				domain: "sensor"
+			} }
+		}, {
 			type: "expandable",
 			name: "display",
 			title: this._et("section_display"),
@@ -2930,7 +2918,6 @@ var Q = class extends V {
 		let e = this._config.show_history !== !1, t = this._config.show_best_refuel !== !1, n = e && t, r = (this._config.entities ?? []).filter((e) => !!this.hass && !this.hass.states[e]);
 		return I`
       <div class="editor">
-        ${this._renderEntitiesSection()}
         <ha-form
           .hass=${this.hass}
           .data=${{
@@ -2952,44 +2939,6 @@ var Q = class extends V {
         ${n ? this._renderRecorderHint() : R}
         ${this._renderTabLabelsSection()}
         ${this._renderCarsRosterSection()}
-      </div>
-    `;
-	}
-	_renderEntitiesSection() {
-		let e = this._config.entities?.length ? this._config.entities : [""];
-		return I`
-      <div class="editor-section">
-        <div class="section-header">${this._et("section_price_entities")}</div>
-        ${e.map((e, t) => I`
-            <div class="entity-row">
-              <ha-textfield
-                id=${`entity-${t}`}
-                class="entity-input"
-                label=${this._et("entity_id")}
-                placeholder="sensor.bft_osdorfer_landstr_5_diesel"
-                .value=${e}
-                autocomplete="off"
-                @input=${(e) => this._onEntityChange(t, e)}
-                @change=${(e) => this._onEntityChange(t, e)}
-                @keydown=${this._stop}
-                @keyup=${this._stop}
-                @keypress=${this._stop}
-              ></ha-textfield>
-              <button
-                class="entity-delete-btn"
-                type="button"
-                aria-label=${this._et("entity_delete")}
-                title=${this._et("entity_delete")}
-                @click=${(e) => this._onDeleteEntity(e, t)}
-              >
-                <ha-icon icon="mdi:delete-outline" aria-hidden="true"></ha-icon>
-              </button>
-            </div>
-          `)}
-        <button class="entity-add-btn" type="button" @click=${this._onAddEntity}>
-          ${this._et("add_entity")}
-        </button>
-        <div class="editor-hint">${this._et("entities_hint")}</div>
       </div>
     `;
 	}
