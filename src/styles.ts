@@ -630,6 +630,10 @@ export const cardStyles = css`
   .station {
     border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.1));
   }
+  .station.featured {
+    border-top: 1px solid var(--divider-color, rgba(127, 127, 127, 0.12));
+    background: color-mix(in srgb, var(--primary-color) 3%, transparent);
+  }
   .station:last-child {
     border-bottom: none;
   }
@@ -731,6 +735,9 @@ export const cardStyles = css`
     grid-template-rows: 1fr;
     padding: 0 var(--tankst-pad-x) 12px calc(var(--tankst-pad-x) + 28px + 12px);
   }
+  .station.featured .station-detail.expanded {
+    padding-top: 4px;
+  }
   .detail-cols {
     display: flex;
     gap: 16px;
@@ -739,6 +746,33 @@ export const cardStyles = css`
   .detail-col {
     flex: 1 1 140px;
     min-width: 0;
+  }
+  .detail-history {
+    flex: 1 1 260px;
+  }
+  .featured-station {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .featured-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+    color: var(--tankst-accent);
+    background: color-mix(in srgb, var(--tankst-accent) 14%, transparent);
+    flex-shrink: 0;
+  }
+  .featured .station-main {
+    background: color-mix(in srgb, var(--primary-color) 4%, transparent);
+  }
+  .featured .station-main:hover {
+    background: color-mix(in srgb, var(--primary-color) 7%, transparent);
   }
   .hours-grid {
     display: grid;
@@ -969,6 +1003,44 @@ export const editorStyles = css`
     font-size: 0.8125rem;
     color: var(--secondary-text-color);
     line-height: 1.4;
+  }
+  .fuel-override-row,
+  .tab-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .fuel-override-meta,
+  .tab-label-default {
+    min-width: 0;
+  }
+  .fuel-override-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .fuel-override-default,
+  .tab-label-default {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fuel-override-help {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--secondary-text-color);
+    line-height: 1.3;
+  }
+  .fuel-override-select,
+  .tab-label-input {
+    flex: 0 0 180px;
+    max-width: 180px;
   }
 
   /* Recorder hint + copy button */

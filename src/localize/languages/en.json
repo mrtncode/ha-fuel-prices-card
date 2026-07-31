@@ -56,7 +56,11 @@
     "sparkline_open_more_info": "Open price history",
     "sparkline_aria_summary": "Price history last 7 days: minimum {min}, maximum {max}, median {median}",
     "sparkline_aria_simple": "Price history last 7 days: minimum {min}, maximum {max}",
-    "history_fetch_error": "Couldn't load price history"
+    "history_fetch_error": "Couldn't load price history",
+    "group_sources": "from {n} sensors",
+    "payment_filter_no_match": "No stations match the active payment filter",
+    "unknown_fuel": "Unknown fuel type",
+    "unknown_station": "Unknown station"
   },
   "fuel_types": {
     "DIE": "Diesel",
@@ -101,9 +105,15 @@
     "section_sensors": "Price entities",
     "section_display": "Display",
     "section_payment_filter": "Payment filter",
+    "section_fuel_grouping": "Fuel grouping",
     "section_tab_labels": "Tab labels",
     "tab_labels_hint": "Leave empty to use the default label",
     "section_cars": "Cars",
+    "fuel_type_auto": "Auto-detect",
+    "fuel_type_auto_unknown": "Auto-detect unavailable",
+    "fuel_type_detected": "Detected:",
+    "fuel_type_effective": "Used:",
+    "fuel_type_override_hint": "Choose a manual fuel type only when automatic detection fails or is wrong.",
     "show_cars": "Show fill-up costs",
     "show_car_fillup": "Show fill-up cost",
     "show_car_consumption": "Show consumption",

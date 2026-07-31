@@ -1,14 +1,13 @@
 import type { CarConfig, FuelType, TankstellenAustriaCardConfig } from "../types";
-
-const ALLOWED_FUEL: readonly FuelType[] = ["DIE", "SUP", "GAS"];
+import { ALLOWED_FUEL_TYPES, isFuelType } from "./fuel";
 
 function normaliseCar(raw: unknown): CarConfig | null {
   if (!raw || typeof raw !== "object") return null;
   const src = raw as Record<string, unknown>;
 
   const name = typeof src.name === "string" ? src.name.slice(0, 50) : "";
-  const fuelType: FuelType = ALLOWED_FUEL.includes(src.fuel_type as FuelType)
-    ? (src.fuel_type as FuelType)
+  const fuelType: FuelType = isFuelType(src.fuel_type)
+    ? src.fuel_type
     : "DIE";
 
   const tankRaw = parseInt(String(src.tank_size), 10);
@@ -73,6 +72,31 @@ export function normaliseConfig(
     );
   } else if (cfg.payment_filter != null) {
     delete cfg.payment_filter;
+  }
+
+  if (cfg.fuel_type_overrides && typeof cfg.fuel_type_overrides === "object") {
+    const overrides: Record<string, FuelType> = {};
+    for (const [entityId, fuelType] of Object.entries(cfg.fuel_type_overrides)) {
+      if (typeof entityId !== "string" || !entityId.includes(".")) continue;
+      if (isFuelType(fuelType)) overrides[entityId] = fuelType;
+    }
+    if (Object.keys(overrides).length) cfg.fuel_type_overrides = overrides;
+    else delete cfg.fuel_type_overrides;
+  } else if (cfg.fuel_type_overrides != null) {
+    delete cfg.fuel_type_overrides;
+  }
+
+  if (cfg.tab_labels && typeof cfg.tab_labels === "object") {
+    const labels: Record<string, string> = {};
+    for (const [key, value] of Object.entries(cfg.tab_labels)) {
+      const label = typeof value === "string" ? value.slice(0, 50).trim() : "";
+      if (!label) continue;
+      labels[key] = label;
+    }
+    if (Object.keys(labels).length) cfg.tab_labels = labels;
+    else delete cfg.tab_labels;
+  } else if (cfg.tab_labels != null) {
+    delete cfg.tab_labels;
   }
 
   // cars: validate per-item; drop items that can't be rescued.

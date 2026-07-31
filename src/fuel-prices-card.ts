@@ -33,6 +33,13 @@ import type {
 import { DYNAMIC_MANUAL_COOLDOWN_MS, HISTORY_REFRESH_MS } from "./const";
 import { normaliseConfig } from "./utils/config";
 import {
+  detectEntityFuelType,
+  fuelGroupKey,
+  normaliseFuelType,
+  resolveEntityFuelType,
+  type FuelGroupKey,
+} from "./utils/fuel";
+import {
   hasPaymentMethods,
   matchesPaymentFilter,
   matchingPaymentMethods,
@@ -74,7 +81,6 @@ import {
 import "./editor";
 
 const ATTRIBUTION_REQUIRED = "Datenquelle: E-Control";
-
 interface WindowWithCustomCards extends Window {
   customCards: Array<{
     type: string;
@@ -100,47 +106,6 @@ interface WindowWithCustomCards extends Window {
   documentationURL: "https://github.com/rolandzeiner/ha-fuel-prices-card",
 });
 
-function normaliseFuelType(raw: string | undefined): FuelType | string {
-  const value = raw?.trim().toLowerCase();
-  switch (value) {
-    case "diesel":
-    case "d":
-    case "die":
-      return "DIE";
-    case "super":
-    case "super95":
-    case "e5":
-    case "95":
-    case "sup":
-      return "SUP";
-    case "cng":
-    case "gas":
-      return "GAS";
-    default:
-      return raw ?? "";
-  }
-}
-
-function detectEntityFuelType(entity: FuelEntity): FuelType | "" {
-  const attrs = entity.attributes as FuelEntityAttributes;
-  const rawFuel = attrs.fuel_type || attrs.fuel_type_name;
-  if (rawFuel) {
-    const norm = normaliseFuelType(String(rawFuel));
-    if (norm === "DIE" || norm === "SUP" || norm === "GAS") return norm;
-  }
-  const searchStr = `${entity.entity_id} ${attrs.friendly_name ?? ""} ${attrs.station_name ?? ""}`.toLowerCase();
-  if (/\b(diesel|die)\b/i.test(searchStr) || searchStr.includes("diesel")) {
-    return "DIE";
-  }
-  if (/\b(super|sup|e5|e10|95|benzin)\b/i.test(searchStr) || searchStr.includes("super") || searchStr.includes("benzin")) {
-    return "SUP";
-  }
-  if (/\b(cng|gas|lpg|autogas)\b/i.test(searchStr) || searchStr.includes("cng") || searchStr.includes("gas")) {
-    return "GAS";
-  }
-  return "";
-}
-
 function firstString(...values: Array<unknown>): string | undefined {
   for (const value of values) {
     if (typeof value === "string" && value.trim().length > 0) {
@@ -156,6 +121,24 @@ function formatLocation(attrs: FuelEntityAttributes): string | undefined {
     .map((part) => String(part).trim())
     .filter((part) => part.length > 0);
   return location.length ? location.join(" ") : undefined;
+}
+
+interface StationEntry {
+  entity: TankstellenEntity;
+  station: Station;
+  stationIndex: number;
+  price: number | null;
+  key: string;
+  fuelType: FuelType | "";
+  groupKey: FuelGroupKey;
+}
+
+interface FuelGroup {
+  key: FuelGroupKey;
+  fuelType: FuelType | "";
+  entities: TankstellenEntity[];
+  stations: StationEntry[];
+  label: string;
 }
 
 @customElement("fuel-prices-card")
@@ -302,6 +285,137 @@ export class FuelPricesCard extends LitElement {
       .filter((e): e is TankstellenEntity => e !== null);
   }
 
+  private _resolveFuelGroups(): FuelGroup[] {
+    const entities = this._resolveEntities();
+    const overrideMap = this._config.fuel_type_overrides ?? {};
+    const grouped = new Map<FuelGroupKey, FuelGroup>();
+    const order: FuelGroupKey[] = [];
+
+    for (const entity of entities) {
+      const override = overrideMap[entity.entity_id];
+      const detected = resolveEntityFuelType(entity, override);
+      const groupFuelType = detected || "";
+      const groupKey = fuelGroupKey(groupFuelType);
+      let group = grouped.get(groupKey);
+      if (!group) {
+        group = {
+          key: groupKey,
+          fuelType: groupFuelType,
+          entities: [],
+          stations: [],
+          label: "",
+        };
+        grouped.set(groupKey, group);
+        order.push(groupKey);
+      } else if (!group.fuelType && groupFuelType) {
+        group.fuelType = groupFuelType;
+      }
+      group.entities.push(entity);
+      group.label = this._groupLabel(groupKey, group.fuelType, group.entities);
+
+      const stationEntries = this._stationEntriesForEntity(entity);
+      stationEntries.forEach((entry) => {
+        group!.stations.push({
+          ...entry,
+          fuelType: groupFuelType,
+          groupKey,
+        });
+      });
+    }
+
+    return order.map((key) => grouped.get(key)).filter((group): group is FuelGroup => !!group);
+  }
+
+  private _stationEntriesForEntity(entity: TankstellenEntity): StationEntry[] {
+    const attrs = entity.attributes as FuelEntityAttributes;
+    const stationList = (attrs.stations ?? []) as Station[];
+    if (stationList.length > 0) {
+      return stationList.map((station, stationIndex) => ({
+        entity,
+        station,
+        stationIndex,
+        price: this._stationPrice(entity, station),
+        key: this._stationKey(entity.entity_id, station),
+        fuelType: "",
+        groupKey: "UNKNOWN",
+      }));
+    }
+
+    const fallbackStation: Station = {
+      name: firstString(attrs.station_name, attrs.friendly_name, attrs.device),
+      price: this._stationPrice(entity, undefined),
+      location: this._stationLocation(attrs),
+      opening_hours: undefined,
+      payment_methods: undefined,
+    };
+
+    return [
+      {
+        entity,
+        station: fallbackStation,
+        stationIndex: 0,
+        price: fallbackStation.price ?? null,
+        key: this._stationKey(entity.entity_id, fallbackStation),
+        fuelType: "",
+        groupKey: "UNKNOWN",
+      },
+    ];
+  }
+
+  private _stationLocation(attrs: FuelEntityAttributes): Station["location"] | undefined {
+    const location = {
+      address: firstString(attrs.street, attrs.house_number),
+      postalCode: attrs.postcode,
+      city: attrs.city,
+      latitude: attrs.latitude,
+      longitude: attrs.longitude,
+    };
+    const hasAny =
+      location.address != null ||
+      location.postalCode != null ||
+      location.city != null ||
+      location.latitude != null ||
+      location.longitude != null;
+    return hasAny ? location : undefined;
+  }
+
+  private _stationPrice(entity: TankstellenEntity, station?: Station): number | null {
+    const stationPrice = station?.price;
+    if (typeof stationPrice === "number" && Number.isFinite(stationPrice)) {
+      return stationPrice;
+    }
+    const parsedEntityPrice = Number.parseFloat(String(entity.state));
+    return Number.isFinite(parsedEntityPrice) ? parsedEntityPrice : null;
+  }
+
+  private _groupLabel(
+    groupKey: FuelGroupKey,
+    fuelType: FuelType | "",
+    entities: TankstellenEntity[],
+  ): string {
+    const labels = this._config.tab_labels ?? {};
+    const direct = labels[groupKey];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+    if (groupKey !== "UNKNOWN") {
+      for (const entity of entities) {
+        const legacy = labels[entity.entity_id];
+        if (typeof legacy === "string" && legacy.trim()) return legacy.trim();
+      }
+    }
+    const sample = entities[0];
+    const fallback =
+      sample && typeof sample.attributes.fuel_type_name === "string"
+        ? sample.attributes.fuel_type_name.trim()
+        : "";
+    if (fallback) return fallback;
+    return fuelType ? getFuelName(fuelType, this._ctx()) : this._t("unknown_fuel");
+  }
+
+  private _stationKey(entityId: string, station: Station): string {
+    const loc = station.location ?? {};
+    return `${entityId}|${station.name ?? ""}|${loc.address ?? ""}|${loc.postalCode ?? ""}|${loc.city ?? ""}`;
+  }
+
   private _ctx(): TranslateContext {
     return {
       configLanguage: this._config?.language,
@@ -311,6 +425,10 @@ export class FuelPricesCard extends LitElement {
 
   private _t(key: string, replacements?: Record<string, string>): string {
     return translate(`card.${key}`, this._ctx(), replacements);
+  }
+
+  private _commonT(key: string, replacements?: Record<string, string>): string {
+    return translate(`common.${key}`, this._ctx(), replacements);
   }
 
   // --- Lifecycle ---
@@ -418,11 +536,10 @@ export class FuelPricesCard extends LitElement {
       `;
     }
 
-    const entities = this._resolveEntities();
-    const activeTab =
-      this._activeTab >= entities.length ? 0 : this._activeTab;
+    const groups = this._resolveFuelGroups();
+    const activeTab = this._activeTab >= groups.length ? 0 : this._activeTab;
 
-    if (!entities.length) {
+    if (!groups.length) {
       return html`
         <ha-card>
           <div class="empty">${this._t("no_data")}</div>
@@ -430,24 +547,55 @@ export class FuelPricesCard extends LitElement {
       `;
     }
 
-    // entities.length > 0 was just checked above, so entities[0] is defined.
-    const active = entities[activeTab] ?? entities[0]!;
+    const activeGroup = groups[activeTab] ?? groups[0]!;
+    const featured = this._featuredStation(activeGroup);
+    const paymentFilter = this._config.payment_filter ?? [];
+    const highlightMode = this._config.payment_highlight_mode === true;
+    const showCars = this._config.show_cars === true;
+    const visibleEntries = this._visibleStationEntries(
+      activeGroup,
+      paymentFilter,
+      highlightMode,
+    );
 
     return html`
       <ha-card>
-        ${this._renderTabs(entities, activeTab)}
+        ${this._renderTabs(groups, activeTab)}
         <div class="wrap">
           ${this._historyError
             ? html`<ha-alert alert-type="warning" role="alert">
                 ${this._t("history_fetch_error")}
               </ha-alert>`
             : nothing}
-          <section class="station-section" style="--tankst-accent: var(--primary-color);">
-            ${this._renderHeader(active)}
-            ${this._renderHero(active)}
-            ${this._renderSparklineBlock(active)}
-            ${this._renderCars(active)}
+          <section
+            class="station-section"
+            style="--tankst-accent: var(--primary-color);"
+          >
+            ${this._renderGroupHeader(activeGroup)}
+            ${featured
+              ? this._renderFeaturedStation(
+                  featured,
+                  activeGroup,
+                  paymentFilter,
+                  highlightMode,
+                )
+              : nothing}
+            ${showCars && featured
+              ? this._renderCars(featured.entity)
+              : nothing}
           </section>
+          ${visibleEntries.length
+            ? this._renderStationList(
+                activeGroup,
+                featured,
+                paymentFilter,
+                highlightMode,
+              )
+            : html`<div class="empty">
+                ${paymentFilter.length && !highlightMode
+                  ? this._t("payment_filter_no_match")
+                  : this._commonT("no_data")}
+              </div>`}
         </div>
       </ha-card>
     `;
@@ -466,19 +614,19 @@ export class FuelPricesCard extends LitElement {
   private _onDismissVersionBanner = (): void => {};
 
   private _renderTabs(
-    entities: TankstellenEntity[],
+    groups: FuelGroup[],
     activeTab: number,
   ): TemplateResult | typeof nothing {
-    if (entities.length <= 1) return nothing;
+    if (groups.length <= 1) return nothing;
     const customLabels: Record<string, string> = this._config.tab_labels ?? {};
     return html`
       <div class="tabs" role="tablist">
-        ${entities.map((e, i) => {
-          const custom = customLabels[e.entity_id];
+        ${groups.map((group, i) => {
+          const custom = customLabels[group.key];
           const label =
             typeof custom === "string" && custom.trim().length > 0
               ? custom
-              : this._entityLabel(e);
+              : group.label;
           const selected = i === activeTab;
           return html`
             <button
@@ -489,7 +637,7 @@ export class FuelPricesCard extends LitElement {
               tabindex=${selected ? "0" : "-1"}
               @click=${() => this._onTabClick(i)}
               @keydown=${(ev: KeyboardEvent) =>
-                this._onTabKeydown(ev, i, entities.length)}
+                this._onTabKeydown(ev, i, groups.length)}
             >
               ${label}
             </button>
@@ -746,6 +894,344 @@ export class FuelPricesCard extends LitElement {
     `;
   }
 
+  private _visibleStationEntries(
+    group: FuelGroup,
+    paymentFilter: readonly string[],
+    highlightMode: boolean,
+  ): StationEntry[] {
+    return group.stations.filter((entry) =>
+      highlightMode ? true : matchesPaymentFilter(entry.station, paymentFilter),
+    );
+  }
+
+  private _sortStationEntries(entries: StationEntry[]): StationEntry[] {
+    if (this._config.sort_by_distance === true) {
+      return [...entries].sort((a, b) => {
+        const ad = a.station.distance_m ?? Infinity;
+        const bd = b.station.distance_m ?? Infinity;
+        if (ad !== bd) return ad - bd;
+        const ap = a.price ?? Infinity;
+        const bp = b.price ?? Infinity;
+        if (ap !== bp) return ap - bp;
+        return a.key.localeCompare(b.key);
+      });
+    }
+    return [...entries];
+  }
+
+  private _pickFeaturedStation(entries: StationEntry[]): StationEntry | null {
+    if (!entries.length) return null;
+    let best = entries[0]!;
+    for (const entry of entries) {
+      if (entry.price == null) continue;
+      if (best.price == null || entry.price < best.price) {
+        best = entry;
+      }
+    }
+    return best;
+  }
+
+  private _featuredStation(group: FuelGroup): StationEntry | null {
+    const paymentFilter = this._config.payment_filter ?? [];
+    const highlightMode = this._config.payment_highlight_mode === true;
+    const visible = this._visibleStationEntries(group, paymentFilter, highlightMode);
+    return this._pickFeaturedStation(visible);
+  }
+
+  private _renderGroupHeader(group: FuelGroup): TemplateResult | typeof nothing {
+    return html`
+      <header class="header">
+        <div class="icon-tile" aria-hidden="true">
+          <ha-icon icon="mdi:gas-station"></ha-icon>
+        </div>
+        <div class="header-text">
+          <h2 class="title">${group.label}</h2>
+          ${group.entities.length > 1
+            ? html`<p class="subtitle">${this._t("group_sources", {
+                n: String(group.entities.length),
+              })}</p>`
+            : nothing}
+        </div>
+      </header>
+    `;
+  }
+
+  private _renderFeaturedStation(
+    entry: StationEntry,
+    group: FuelGroup,
+    paymentFilter: readonly string[],
+    highlightMode: boolean,
+  ): TemplateResult {
+    return html`
+      <section class="featured-station">
+        ${this._renderHero(entry)}
+        ${this._renderStationCard(entry, {
+          groupKey: group.key,
+          rank: 1,
+          featured: true,
+          showIndex: false,
+          showPrice: this._config.hide_header_price === true,
+          expanded: true,
+          paymentFilter,
+          highlightMode,
+        })}
+      </section>
+    `;
+  }
+
+  private _renderStationList(
+    group: FuelGroup,
+    featured: StationEntry | null,
+    paymentFilter: readonly string[],
+    highlightMode: boolean,
+  ): TemplateResult | typeof nothing {
+    const visible = this._visibleStationEntries(group, paymentFilter, highlightMode);
+    const featuredKey = featured?.key ?? null;
+    const remainder = visible.filter((entry) => entry.key !== featuredKey);
+    const ordered = this._sortStationEntries(remainder);
+    const parsedMax = parseInt(String(this._config.max_stations), 10);
+    const maxStations = Number.isFinite(parsedMax)
+      ? Math.max(0, Math.min(5, parsedMax))
+      : 5;
+    const display = ordered.slice(0, Math.max(0, maxStations - 1));
+    if (!display.length) return nothing;
+
+    return html`
+      <div class="stations">
+        ${display.map((entry, idx) =>
+          this._renderStationCard(entry, {
+            groupKey: group.key,
+            rank: idx + 2,
+            featured: false,
+            showIndex: this._config.show_index !== false,
+            showPrice: true,
+            expanded: false,
+            paymentFilter,
+            highlightMode,
+          }),
+        )}
+      </div>
+    `;
+  }
+
+  private _renderStationCard(
+    entry: StationEntry,
+    options: {
+      groupKey: FuelGroupKey;
+      rank: number;
+      featured: boolean;
+      showIndex: boolean;
+      showPrice: boolean;
+      expanded: boolean;
+      paymentFilter: readonly string[];
+      highlightMode: boolean;
+    },
+  ): TemplateResult {
+    const { station: s } = entry;
+    const loc = s.location ?? {};
+    const showMapLinks = this._config.show_map_links !== false;
+    const showDistance = this._config.show_distance === true;
+    const showHours = this._config.show_opening_hours !== false;
+    const showPayment = this._config.show_payment_methods !== false;
+    const showHistory = this._config.show_history !== false;
+    const key = `${options.groupKey}|${entry.key}`;
+    const isExpanded = options.featured || this._expandedStations.has(key);
+    const isClosed = s.open === false;
+    const isClosingSoonFlag = !isClosed && isClosingSoon(s);
+    const highlighted =
+      options.highlightMode &&
+      options.paymentFilter.length > 0 &&
+      matchesPaymentFilter(s, options.paymentFilter);
+    const matchChips = highlighted
+      ? matchingPaymentMethods(s, options.paymentFilter, {
+          cash: this._t("cash"),
+          debit_card: this._t("debit_card"),
+          credit_card: this._t("credit_card"),
+        })
+      : [];
+    const hasHoursBlock = showHours && !!s.opening_hours?.length;
+    const hasPaymentBlock = showPayment && hasPaymentMethods(s.payment_methods);
+    const hasHistoryBlock = showHistory && this._history[entry.entity.entity_id]?.length >= 2;
+    const hasDetail = hasHoursBlock || hasPaymentBlock || hasHistoryBlock;
+    const title = this._stationLabel(s);
+    const rowLabel = [
+      title,
+      loc.city ?? "",
+      options.showPrice ? formatPrice(s.price) : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const detailId = hasDetail ? `tsa-station-detail-${options.groupKey}-${entry.key}` : undefined;
+    const cityText = loc.city ?? "";
+    const addressText = loc.address ?? "";
+    const localityText = [loc.postalCode, cityText]
+      .filter((p): p is string | number => p != null && p !== "")
+      .join(" ");
+    const localityTpl = localityText
+      ? html`<span lang="de">${localityText}</span>`
+      : nothing;
+    const addressTpl = addressText
+      ? html`<span lang="de">${addressText}</span>`
+      : nothing;
+    const addressSeparator =
+      localityTpl !== nothing && addressTpl !== nothing ? ", " : "";
+
+    return html`
+      <div class=${classMap({
+        station: true,
+        featured: options.featured,
+        "pm-highlight": highlighted,
+      })}>
+        <div
+          class="station-main"
+          role=${hasDetail ? "button" : "group"}
+          tabindex=${hasDetail ? "0" : "-1"}
+          aria-expanded=${hasDetail ? (isExpanded ? "true" : "false") : nothing}
+          aria-controls=${detailId ?? nothing}
+          aria-label=${rowLabel}
+          @click=${() => this._onStationClick(key)}
+          @keydown=${(ev: KeyboardEvent) =>
+            this._onStationKeydown(ev, key, hasDetail)}
+        >
+          ${options.featured
+            ? html`<div class="featured-badge">${this._t("cheapest")}</div>`
+            : options.showIndex
+              ? html`<div class="index-tile" aria-hidden="true">${options.rank}</div>`
+              : nothing}
+          <div class="info">
+            <div class="name">
+              ${title ? html`<span lang="de">${title}</span>` : "â€“"}
+              ${isClosed
+                ? html`<span class="flag closed">${this._t("closed")}</span>`
+                : isClosingSoonFlag
+                  ? html`<span class="flag closing-soon">
+                      ${this._t("closing_soon")}
+                    </span>`
+                  : nothing}
+              ${matchChips.map(
+                (m) => html`<span class="chip match">${m}</span>`,
+              )}
+            </div>
+            <div class="address">
+              ${localityTpl}${addressSeparator}${addressTpl}
+            </div>
+          </div>
+          ${options.showPrice
+            ? html`<div class="price">${formatPrice(s.price)}</div>`
+            : nothing}
+          ${(() => {
+            let pin: TemplateResult | typeof nothing = nothing;
+            if (showMapLinks) {
+              const linkKind = resolveMapLinkKind(
+                this._config.map_provider ?? "auto",
+                detectNavPlatform(
+                  navigator.userAgent,
+                  navigator.maxTouchPoints,
+                ),
+              );
+              const url = safeNavUri(mapsUrl(loc, s.name ?? "", linkKind));
+              if (url) {
+                pin = html`
+                  <a
+                    class="icon-action map"
+                    href=${url}
+                    target=${url.startsWith("geo:") ? "_self" : "_blank"}
+                    rel="noopener noreferrer"
+                    aria-label=${`${this._t("map")}: ${s.name ?? ""}`}
+                    title=${this._t("map")}
+                    @click=${this._onMapLinkClick}
+                  >
+                    <ha-icon
+                      icon=${/\d/.test(loc.address ?? "")
+                        ? "mdi:map-marker"
+                        : "mdi:magnify"}
+                      aria-hidden="true"
+                    ></ha-icon>
+                  </a>
+                `;
+              }
+            }
+
+            const distance =
+              showDistance && s.distance_m != null
+                ? html`<span class="distance" lang="de"
+                    >${formatDistance(s.distance_m)}</span
+                  >`
+                : nothing;
+
+            if (pin === nothing && distance === nothing) return nothing;
+            return html`<div
+              class=${classMap({
+                "map-action": true,
+                "has-distance": distance !== nothing,
+              })}
+            >
+              ${pin}${distance}
+            </div>`;
+          })()}
+          ${hasDetail
+            ? html`<ha-icon
+                class="expander-chevron"
+                icon="mdi:chevron-down"
+                aria-hidden="true"
+              ></ha-icon>`
+            : nothing}
+        </div>
+        ${hasDetail
+          ? html`
+              <div
+                id=${detailId!}
+                class=${classMap({
+                  "station-detail": true,
+                  expanded: isExpanded,
+                })}
+              >
+                <div class="detail-cols">
+                  ${hasHistoryBlock
+                    ? html`
+                        <div class="detail-col detail-history">
+                          ${this._renderSparkline(entry.entity)}
+                        </div>
+                      `
+                    : nothing}
+                  ${hasHoursBlock
+                    ? html`<div class="detail-col">${this._renderHours(s.opening_hours ?? [])}</div>`
+                    : nothing}
+                  ${hasPaymentBlock
+                    ? html`<div class="detail-col">${this._renderPaymentMethods(s.payment_methods)}</div>`
+                    : nothing}
+                </div>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderHero(entry: StationEntry): TemplateResult | typeof nothing {
+    const price = entry.price;
+    if (price == null) return nothing;
+    if (this._config.hide_header_price === true) return nothing;
+    return html`
+      <div class="hero">
+        <div class="metric">
+          <div class="metric-value">
+            <span class="metric-num">${formatPrice(price)}</span>
+          </div>
+          <div class="metric-label">${this._t("price")}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _stationLabel(station: Station): string {
+    const loc = station.location ?? {};
+    return (
+      firstString(station.name, loc.address, loc.city) ??
+      this._t("unknown_station")
+    );
+  }
+
   private _renderCars(active: FuelEntity): TemplateResult | typeof nothing {
     const showCars = this._config.show_cars === true;
     const showCarFillup = this._config.show_car_fillup !== false;
@@ -833,259 +1319,6 @@ export class FuelPricesCard extends LitElement {
           <span class="car-fillup-liters">${consumptionStr} l/100 km</span>
         </span>
         <span class="car-fillup-cost">${per100Str} / 100 km</span>
-      </div>
-    `;
-  }
-
-  private _renderStationList(
-    active: TankstellenEntity,
-    activeTab: number,
-  ): TemplateResult | typeof nothing {
-    const stations: Station[] = active.attributes.stations ?? [];
-    const parsedMax = parseInt(String(this._config.max_stations), 10);
-    const maxStations = Number.isFinite(parsedMax)
-      ? Math.max(0, Math.min(5, parsedMax))
-      : 5;
-    const paymentFilter = this._config.payment_filter ?? [];
-    const highlightMode = this._config.payment_highlight_mode === true;
-
-    const filtered = highlightMode
-      ? stations
-      : stations.filter((s) => matchesPaymentFilter(s, paymentFilter));
-
-    // 0 hides the station list entirely — don't show a fallback message.
-    if (maxStations === 0) return nothing;
-
-    if (!filtered.length && paymentFilter.length && stations.length) {
-      return html`
-        <div class="empty">
-          ${this._t("payment_filter_active")} — ${this._t("no_data")}
-        </div>
-      `;
-    }
-    if (!filtered.length) {
-      return html`<div class="empty">${this._t("no_data")}</div>`;
-    }
-
-    // Opt-in re-sort: the integration delivers stations cheapest-first;
-    // when enabled, order by Luftlinie instead. `sort` is stable, so
-    // stations without a stamped `distance_m` sink to the tail while
-    // keeping their cheapest-first order among themselves.
-    const ordered =
-      this._config.sort_by_distance === true
-        ? [...filtered].sort(
-            (a, b) =>
-              (a.distance_m ?? Number.POSITIVE_INFINITY) -
-              (b.distance_m ?? Number.POSITIVE_INFINITY),
-          )
-        : filtered;
-
-    const display = ordered.slice(0, maxStations);
-    return html`
-      <div class="stations">
-        ${display.map((s, idx) =>
-          this._renderStation(s, idx, activeTab, paymentFilter, highlightMode),
-        )}
-      </div>
-    `;
-  }
-
-  private _renderStation(
-    s: Station,
-    idx: number,
-    activeTab: number,
-    paymentFilter: readonly string[],
-    highlightMode: boolean,
-  ): TemplateResult {
-    const showIndex = this._config.show_index !== false;
-    const showMapLinks = this._config.show_map_links !== false;
-    // Opt-in: render only when explicitly enabled. An existing card config
-    // predating this feature has no `show_distance` key, so it stays hidden
-    // (and the editor toggle, which reads absent as off, agrees). New cards
-    // get `show_distance: true` from getStubConfig, so the feature shows by
-    // default there while toggle and behaviour stay consistent.
-    const showDistance = this._config.show_distance === true;
-    const showHours = this._config.show_opening_hours !== false;
-    const showPayment = this._config.show_payment_methods !== false;
-    const loc = s.location ?? {};
-
-    // Key the expanded-state on station identity, not list position.
-    // Stations are sorted cheapest-first by the integration, so position
-    // shifts whenever prices update — keying on `${activeTab}-${idx}` would
-    // leave the detail panel attached to whichever station now occupies the
-    // old slot. `name|address` is the stable identifier the API exposes; the
-    // tab prefix keeps state per-fuel-type even though `_onTabClick` already
-    // clears the set on tab switch (belt-and-braces).
-    const key = `${activeTab}|${s.name ?? ""}|${loc.address ?? ""}`;
-    const isExpanded = this._expandedStations.has(key);
-    const isClosed = s.open === false;
-    const isClosingSoonFlag = !isClosed && isClosingSoon(s);
-
-    const highlighted =
-      highlightMode &&
-      paymentFilter.length > 0 &&
-      matchesPaymentFilter(s, paymentFilter);
-    const matchChips = highlighted
-      ? matchingPaymentMethods(s, paymentFilter, {
-          cash: this._t("cash"),
-          debit_card: this._t("debit_card"),
-          credit_card: this._t("credit_card"),
-        })
-      : [];
-
-    const hasHoursBlock = showHours && !!s.opening_hours?.length;
-    const hasPaymentBlock = showPayment && hasPaymentMethods(s.payment_methods);
-    const hasDetail = hasHoursBlock || hasPaymentBlock;
-
-    const rowLabel = [
-      s.name || "–",
-      loc.city ?? "",
-      formatPrice(s.price),
-    ]
-      .filter(Boolean)
-      .join(", ");
-    const detailId = hasDetail ? `tsa-station-detail-${activeTab}-${idx}` : undefined;
-    const hasName = !!s.name;
-    const cityText = loc.city ?? "";
-    const addressText = loc.address ?? "";
-    // Build the address row from whichever parts the API supplied. Rural
-    // stations often have only a postal code (no city, no street); the
-    // previous template emitted a literal comma + space regardless, which
-    // rendered as e.g. "4310 ," for those. Locality (PLZ + city) and street
-    // each get their own `<span lang="de">` for screen-reader pronunciation
-    // and join with ", " only when both are present.
-    const localityText = [loc.postalCode, cityText]
-      .filter((p): p is string | number => p != null && p !== "")
-      .join(" ");
-    const localityTpl = localityText
-      ? html`<span lang="de">${localityText}</span>`
-      : nothing;
-    const addressTpl = addressText
-      ? html`<span lang="de">${addressText}</span>`
-      : nothing;
-    const addressSeparator =
-      localityTpl !== nothing && addressTpl !== nothing ? ", " : "";
-    return html`
-      <div class=${classMap({ station: true, "pm-highlight": highlighted })}>
-        <div
-          class="station-main"
-          role=${hasDetail ? "button" : "group"}
-          tabindex=${hasDetail ? "0" : "-1"}
-          aria-expanded=${hasDetail ? (isExpanded ? "true" : "false") : nothing}
-          aria-controls=${detailId ?? nothing}
-          aria-label=${rowLabel}
-          @click=${() => this._onStationClick(key)}
-          @keydown=${(ev: KeyboardEvent) =>
-            this._onStationKeydown(ev, key, hasDetail)}
-        >
-          ${showIndex
-            ? html`<div class="index-tile" aria-hidden="true">${idx + 1}</div>`
-            : nothing}
-          <div class="info">
-            <div class="name">
-              ${hasName
-                ? html`<span lang="de">${s.name}</span>`
-                : "–"}
-              ${isClosed
-                ? html`<span class="flag closed">${this._t("closed")}</span>`
-                : isClosingSoonFlag
-                  ? html`<span class="flag closing-soon"
-                      >${this._t("closing_soon")}</span
-                    >`
-                  : nothing}
-              ${matchChips.map(
-                (m) => html`<span class="chip match">${m}</span>`,
-              )}
-            </div>
-            <div class="address">
-              ${localityTpl}${addressSeparator}${addressTpl}
-            </div>
-          </div>
-          <div class="price">${formatPrice(s.price)}</div>
-          ${(() => {
-            // Map-pin link to Google Maps, with the Luftlinie distance as a
-            // caption beneath it. Both are optional and independently toggled.
-            let pin: TemplateResult | typeof nothing = nothing;
-            if (showMapLinks) {
-              const linkKind = resolveMapLinkKind(
-                this._config.map_provider ?? "auto",
-                detectNavPlatform(
-                  navigator.userAgent,
-                  navigator.maxTouchPoints,
-                ),
-              );
-              const url = safeNavUri(mapsUrl(loc, s.name ?? "", linkKind));
-              // mapsUrl returns null when neither a station name nor any
-              // location field is available — and safeNavUri returns ""
-              // for URIs outside its allowlist. Either way, skip the <a>
-              // rather than emit an empty href that would reload the page
-              // on click. geo: URIs must navigate in-tab (`_self`) so the
-              // OS intercepts them as an intent; a new tab would be left
-              // blank even when the chooser opens.
-              if (url) {
-                pin = html`
-                  <a
-                    class="icon-action map"
-                    href=${url}
-                    target=${url.startsWith("geo:") ? "_self" : "_blank"}
-                    rel="noopener noreferrer"
-                    aria-label=${`${this._t("map")}: ${s.name ?? ""}`}
-                    title=${this._t("map")}
-                    @click=${this._onMapLinkClick}
-                  >
-                    <ha-icon
-                      icon=${/\d/.test(loc.address ?? "")
-                        ? "mdi:map-marker"
-                        : "mdi:magnify"}
-                      aria-hidden="true"
-                    ></ha-icon>
-                  </a>
-                `;
-              }
-            }
-
-            const distance =
-              showDistance && s.distance_m != null
-                ? html`<span class="distance" lang="de"
-                    >${formatDistance(s.distance_m)}</span
-                  >`
-                : nothing;
-
-            if (pin === nothing && distance === nothing) return nothing;
-            return html`<div
-              class=${classMap({
-                "map-action": true,
-                "has-distance": distance !== nothing,
-              })}
-            >
-              ${pin}${distance}
-            </div>`;
-          })()}
-          ${hasDetail
-            ? html`<ha-icon
-                class="expander-chevron"
-                icon="mdi:chevron-down"
-                aria-hidden="true"
-              ></ha-icon>`
-            : nothing}
-        </div>
-        ${hasDetail
-          ? html`
-              <div
-                id=${detailId!}
-                class=${classMap({ "station-detail": true, expanded: isExpanded })}
-              >
-                <div class="detail-cols">
-                  ${hasHoursBlock
-                    ? html`<div class="detail-col">${this._renderHours(s.opening_hours ?? [])}</div>`
-                    : nothing}
-                  ${hasPaymentBlock
-                    ? html`<div class="detail-col">${this._renderPaymentMethods(s.payment_methods)}</div>`
-                    : nothing}
-                </div>
-              </div>
-            `
-          : nothing}
       </div>
     `;
   }

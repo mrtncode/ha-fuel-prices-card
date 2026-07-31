@@ -134,6 +134,7 @@ export interface FuelPricesCardConfig extends LovelaceCardConfig {
   payment_filter?: string[];
   payment_highlight_mode?: boolean;
 
+  fuel_type_overrides?: Record<string, FuelType>;
   tab_labels?: Record<string, string>;
 
   show_cars?: boolean;
@@ -184,6 +185,14 @@ export interface Station {
 
 export interface FuelEntityAttributes {
   friendly_name?: string;
+  station_name?: string;
+  device?: string;
+  street?: string;
+  house_number?: string;
+  postcode?: string | number;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
   fuel_type?: FuelType | string;
   fuel_type_name?: string;
   stations?: Station[];

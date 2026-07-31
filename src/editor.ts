@@ -43,6 +43,8 @@ import { classMap } from "lit/directives/class-map.js";
 import {
   fireEvent,
   type CarConfig,
+  type FuelEntity,
+  type FuelEntityAttributes,
   type FuelPricesCardConfig,
   type FuelType,
   type HaFormSchema,
@@ -56,6 +58,12 @@ import {
   translate,
   type TranslateContext,
 } from "./localize/localize";
+import {
+  detectEntityFuelType,
+  fuelGroupKey,
+  resolveEntityFuelType,
+  type FuelGroupKey,
+} from "./utils/fuel";
 import { editorStyles } from "./styles";
 
 // Strip HTML-injection chars, cap length, trim. Applied to every free-form
@@ -123,6 +131,29 @@ export class FuelPricesCardEditor
       if (cleaned.length) configToSend.entities = cleaned;
       else delete configToSend.entities;
     }
+    if (configToSend.fuel_type_overrides) {
+      const cleaned: Record<string, FuelType> = {};
+      for (const [entityId, fuelType] of Object.entries(
+        configToSend.fuel_type_overrides,
+      )) {
+        if (!entityId.includes(".")) continue;
+        if (fuelType === "DIE" || fuelType === "SUP" || fuelType === "GAS") {
+          cleaned[entityId] = fuelType;
+        }
+      }
+      if (Object.keys(cleaned).length) configToSend.fuel_type_overrides = cleaned;
+      else delete configToSend.fuel_type_overrides;
+    }
+    if (configToSend.tab_labels) {
+      const cleaned: Record<string, string> = {};
+      for (const [key, value] of Object.entries(configToSend.tab_labels)) {
+        const label = sanitizeShort(String(value ?? ""));
+        if (!label) continue;
+        cleaned[key] = label;
+      }
+      if (Object.keys(cleaned).length) configToSend.tab_labels = cleaned;
+      else delete configToSend.tab_labels;
+    }
     fireEvent(this, "config-changed", { config: configToSend });
   }
 
@@ -164,6 +195,71 @@ export class FuelPricesCardEditor
       return `${base} · ${fuelName}`;
     }
     return base;
+  }
+
+  private _fuelEntity(entityId: string): FuelEntity | null {
+    const state = this.hass?.states[entityId];
+    if (!state) return null;
+    return {
+      entity_id: entityId,
+      state: state.state,
+      attributes: state.attributes as FuelEntityAttributes,
+      last_updated: state.last_updated,
+    };
+  }
+
+  private _effectiveFuelType(entityId: string): FuelType | "" {
+    const entity = this._fuelEntity(entityId);
+    if (!entity) return "";
+    const override = this._config.fuel_type_overrides?.[entityId];
+    return resolveEntityFuelType(entity, override);
+  }
+
+  private _fuelGroups(): Array<{
+    key: FuelGroupKey;
+    fuelType: FuelType | "";
+    entityIds: string[];
+    label: string;
+  }> {
+    if (!this.hass) return [];
+    const groups = new Map<FuelGroupKey, { key: FuelGroupKey; fuelType: FuelType | ""; entityIds: string[] }>();
+    const order: FuelGroupKey[] = [];
+    for (const entityId of this._config.entities ?? []) {
+      if (!this.hass.states[entityId]) continue;
+      const fuelType = this._effectiveFuelType(entityId);
+      const key = fuelGroupKey(fuelType);
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, fuelType, entityIds: [] };
+        groups.set(key, group);
+        order.push(key);
+      }
+      group.entityIds.push(entityId);
+    }
+    const labels: Record<string, string> = this._config.tab_labels ?? {};
+    return order.map((key) => {
+      const group = groups.get(key)!;
+      const direct = typeof labels[key] === "string" ? labels[key].trim() : "";
+      if (direct) {
+        return { ...group, label: direct };
+      }
+      if (key !== "UNKNOWN") {
+        for (const entityId of group.entityIds) {
+          const legacy = typeof labels[entityId] === "string" ? labels[entityId].trim() : "";
+          if (legacy) return { ...group, label: legacy };
+        }
+      }
+      const sampleId = group.entityIds[0];
+      const sample = sampleId ? this.hass.states[sampleId] : undefined;
+      const fallback =
+        typeof sample?.attributes?.fuel_type_name === "string" &&
+        sample.attributes.fuel_type_name.trim()
+          ? sample.attributes.fuel_type_name.trim()
+          : group.fuelType
+            ? getFuelName(group.fuelType, this._ctx())
+            : this._et("unknown_fuel");
+      return { ...group, label: fallback };
+    });
   }
 
   // ------------------------------------------------------------------
@@ -343,6 +439,7 @@ export class FuelPricesCardEditor
         )}
 
         ${showRecorderHint ? this._renderRecorderHint() : nothing}
+        ${this._renderFuelGroupingSection()}
         ${this._renderTabLabelsSection()}
         ${this._renderCarsRosterSection()}
       </div>
@@ -380,51 +477,98 @@ export class FuelPricesCardEditor
     `;
   }
 
-  // -- Tab labels (bespoke: row list driven by entity selection) ------
+  // -- Fuel grouping + tab labels (bespoke: row lists driven by entity selection) ------
 
-  private _renderTabLabelsSection(): TemplateResult | typeof nothing {
+  private _renderFuelGroupingSection(): TemplateResult | typeof nothing {
     if (!this.hass) return nothing;
-    const selected = this._config.entities ?? [];
-    const ids = selected;
-    const resolvable = ids
+    const selected = (this._config.entities ?? [])
       .map((eid) => ({ eid, state: this.hass!.states[eid] }))
       .filter(
         (x): x is { eid: string; state: NonNullable<typeof x.state> } =>
           !!x.state,
       );
-    if (resolvable.length < 2) return nothing;
+    if (!selected.length) return nothing;
+
+    const overrides = this._config.fuel_type_overrides ?? {};
+    return html`
+      <div class="editor-section">
+        <div class="section-header">${this._et("section_fuel_grouping")}</div>
+        ${selected.map(({ eid, state }) => {
+          const entity = this._fuelEntity(eid);
+          if (!entity) return nothing;
+          const detected = detectEntityFuelType(entity);
+          const override = overrides[eid];
+          const effective = resolveEntityFuelType(entity, override);
+          const detectedLabel = detected
+            ? getFuelName(detected, this._ctx())
+            : this._et("fuel_type_auto_unknown");
+          const effectiveLabel = effective
+            ? getFuelName(effective, this._ctx())
+            : this._et("unknown_fuel");
+          const inputId = `fuel-override-${eid.replace(/[^a-z0-9_-]/gi, "-")}`;
+          return html`
+            <div class="fuel-override-row">
+              <div class="fuel-override-meta">
+                <label class="fuel-override-default" for=${inputId} title=${this._entityLabel(eid)}>
+                  ${this._entityLabel(eid)}
+                </label>
+                <div class="fuel-override-help">
+                  <span>${this._et("fuel_type_detected")} ${detectedLabel}</span>
+                  <span>${this._et("fuel_type_effective")} ${effectiveLabel}</span>
+                </div>
+              </div>
+              <select
+                id=${inputId}
+                class="fuel-override-select"
+                .value=${override ?? ""}
+                @change=${(e: Event) => this._onFuelOverrideChange(eid, e)}
+              >
+                <option value="">${this._et("fuel_type_auto")}</option>
+                ${(["DIE", "SUP", "GAS"] as FuelType[]).map(
+                  (ft) => html`
+                    <option value=${ft} ?selected=${override === ft}>
+                      ${getFuelName(ft, this._ctx())}
+                    </option>
+                  `,
+                )}
+              </select>
+            </div>
+          `;
+        })}
+        <div class="editor-hint">${this._et("fuel_type_override_hint")}</div>
+      </div>
+    `;
+  }
+
+  private _renderTabLabelsSection(): TemplateResult | typeof nothing {
+    if (!this.hass) return nothing;
+    const groups = this._fuelGroups();
+    if (groups.length < 2) return nothing;
 
     const labels: Record<string, string> = this._config.tab_labels ?? {};
     return html`
       <div class="editor-section">
         <div class="section-header">${this._et("section_tab_labels")}</div>
-        ${resolvable.map(({ eid, state }) => {
-          let defaultLabel = this._entityLabel(eid);
-          if (state.attributes?.dynamic_mode === true) {
-            const trackerLabel = state.attributes.dynamic_tracker_label as
-              | string
-              | undefined;
-            if (trackerLabel) defaultLabel += ` · ${trackerLabel}`;
-          }
-          const current = typeof labels[eid] === "string" ? labels[eid] : "";
-          const inputId = `tablbl-${eid.replace(/[^a-z0-9_-]/gi, "-")}`;
+        ${groups.map((group) => {
+          const current = typeof labels[group.key] === "string" ? labels[group.key] : "";
+          const inputId = `tablbl-${group.key.replace(/[^a-z0-9_-]/gi, "-")}`;
           return html`
             <div class="tab-label-row">
-              <label class="tab-label-default" for=${inputId} title=${defaultLabel}>${defaultLabel}</label>
+              <label class="tab-label-default" for=${inputId} title=${group.label}>${group.label}</label>
               <input
                 id=${inputId}
                 class="tab-label-input"
                 type="text"
                 autocomplete="off"
                 maxlength="50"
-                placeholder=${defaultLabel}
+                placeholder=${group.label}
                 .value=${current}
                 @click=${this._stop}
                 @pointerdown=${this._stop}
                 @keydown=${this._stop}
                 @keyup=${this._stop}
                 @keypress=${this._stop}
-                @change=${(e: Event) => this._onTabLabelChange(eid, e)}
+                @change=${(e: Event) => this._onTabLabelChange(String(group.key), e)}
               />
             </div>
           `;
@@ -711,16 +855,34 @@ export class FuelPricesCardEditor
     }
   }
 
-  private _onTabLabelChange(eid: string, e: Event): void {
+  private _onTabLabelChange(key: string, e: Event): void {
     e.stopPropagation();
     const target = e.target as HTMLInputElement;
     const val = sanitizeShort(target.value);
     const labels: Record<string, string> = { ...(this._config.tab_labels ?? {}) };
-    if (val) labels[eid] = val;
-    else delete labels[eid];
+    if (val) labels[key] = val;
+    else delete labels[key];
     const next: FuelPricesCardConfig = { ...this._config };
     if (Object.keys(labels).length) next.tab_labels = labels;
     else delete next.tab_labels;
+    this._config = next;
+    this._fireChanged();
+  }
+
+  private _onFuelOverrideChange(entityId: string, e: Event): void {
+    e.stopPropagation();
+    const target = e.target as HTMLSelectElement;
+    const raw = sanitizeShort(target.value);
+    const overrides: Record<string, FuelType> = {
+      ...(this._config.fuel_type_overrides ?? {}),
+    };
+    if (raw === "") delete overrides[entityId];
+    else if (raw === "DIE" || raw === "SUP" || raw === "GAS") {
+      overrides[entityId] = raw;
+    }
+    const next: FuelPricesCardConfig = { ...this._config };
+    if (Object.keys(overrides).length) next.fuel_type_overrides = overrides;
+    else delete next.fuel_type_overrides;
     this._config = next;
     this._fireChanged();
   }

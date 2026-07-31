@@ -56,7 +56,11 @@
     "sparkline_open_more_info": "Preisverlauf öffnen",
     "sparkline_aria_summary": "Preisverlauf der letzten 7 Tage: Minimum {min}, Maximum {max}, Median {median}",
     "sparkline_aria_simple": "Preisverlauf der letzten 7 Tage: Minimum {min}, Maximum {max}",
-    "history_fetch_error": "Preisverlauf konnte nicht geladen werden"
+    "history_fetch_error": "Preisverlauf konnte nicht geladen werden",
+    "group_sources": "von {n} Sensoren",
+    "payment_filter_no_match": "Keine Tankstellen passen zum aktiven Zahlungsfilter",
+    "unknown_fuel": "Unbekannte Kraftstoffart",
+    "unknown_station": "Unbekannte Tankstelle"
   },
   "fuel_types": {
     "DIE": "Diesel",
@@ -101,9 +105,15 @@
     "section_sensors": "Preis-Entitäten",
     "section_display": "Anzeige",
     "section_payment_filter": "Zahlungsfilter",
+    "section_fuel_grouping": "Kraftstoff-Gruppierung",
     "section_tab_labels": "Tab-Bezeichnungen",
     "tab_labels_hint": "Leer lassen, um die Standard-Bezeichnung zu verwenden",
     "section_cars": "Fahrzeuge",
+    "fuel_type_auto": "Automatisch erkennen",
+    "fuel_type_auto_unknown": "Automatische Erkennung nicht möglich",
+    "fuel_type_detected": "Erkannt:",
+    "fuel_type_effective": "Verwendet:",
+    "fuel_type_override_hint": "Eine manuelle Kraftstoffart nur wählen, wenn die automatische Erkennung fehlt oder falsch ist.",
     "show_cars": "Tankkosten anzeigen",
     "show_car_fillup": "Tankkosten anzeigen",
     "show_car_consumption": "Verbrauch anzeigen",
